@@ -1,0 +1,13 @@
+# Build artifacts from `typst compile`
+*.pdf
+*.png
+*.svg
+!docs/img/*.svg
+!docs/img/*.png
+
+# Quarto build output and cache
+docs/quarto/_book/
+docs/quarto/.quarto/
+
+# macOS
+.DS_Store

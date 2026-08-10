@@ -1,0 +1,71 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one Pages deployment at a time; let an in-flight one finish rather
+# than cancel it mid-upload.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+env:
+  # Pinned, not "latest": tests/run.sh's documentation-asset check compares
+  # committed docs/img/*.svg against a fresh compile (see
+  # tests/compare-svg.py), so CI should render with the same Typst version
+  # those SVGs were generated with locally. Bump this together with
+  # typst.toml's `compiler` field.
+  TYPST_VERSION: "0.15.1"
+  QUARTO_VERSION: "1.10.18"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Typst
+        run: |
+          curl -fsSL "https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/typst-x86_64-unknown-linux-musl.tar.xz" -o typst.tar.xz
+          tar -xf typst.tar.xz
+          sudo mv "typst-x86_64-unknown-linux-musl/typst" /usr/local/bin/typst
+          typst --version
+
+      - name: Install Quarto
+        run: |
+          curl -fsSL "https://github.com/quarto-dev/quarto-cli/releases/download/v${QUARTO_VERSION}/quarto-${QUARTO_VERSION}-linux-amd64.tar.gz" -o quarto.tar.gz
+          sudo tar -xzf quarto.tar.gz -C /opt
+          sudo ln -s "/opt/quarto-${QUARTO_VERSION}/bin/quarto" /usr/local/bin/quarto
+          quarto --version
+
+      - name: Run test suite
+        run: bash tests/run.sh
+
+      - name: Render docs
+        run: quarto render docs/quarto
+
+      - name: Upload Pages artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/quarto/_book
+
+  deploy:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

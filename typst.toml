@@ -1,0 +1,12 @@
+[package]
+name = "typograph"
+version = "0.1.0"
+entrypoint = "src/lib.typ"
+authors = ["Benjamin Cichos"]
+license = "MIT"
+description = "A neutral, themeable diagram engine for Typst: nodes, edges, curves, ports, and layered styling, with no built-in visual language of its own."
+repository = "https://github.com/BenCichos/typstzx"
+keywords = ["diagram", "graph", "node", "edge", "drawing"]
+categories = ["visualization"]
+compiler = "0.15.1"
+exclude = ["tests", ".gitignore", "/*.pdf"]
