@@ -39,6 +39,9 @@ right, `y` increases upward.
   typ.edge(b, (2, 0))
 })
 ```
+<p align="center">
+    <img src="docs/img/quickstart.svg">
+<p/>
 
 An edge automatically contributes the nodes at its endpoints. See the
 [full documentation](https://bencichos.github.io/typograph/) for the
