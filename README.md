@@ -39,8 +39,9 @@ right, `y` increases upward.
   typ.edge(b, (2, 0))
 })
 ```
+
 <p align="center">
-    <img src="docs/img/quickstart.svg">
+    <img alt="Render output showing a diagram with two nodes labelled A and B respectively, connected by an edge" src="docs/img/quickstart.svg">
 <p/>
 
 An edge automatically contributes the nodes at its endpoints. See the
