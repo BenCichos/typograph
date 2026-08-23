@@ -14,16 +14,74 @@ rendered gallery.
 | `typ.shapes.stadium` | Maximally rounded fitted rectangle. Rejects nonzero `rotate`. |
 | `typ.shapes.rect` | Fitted rectangle using `style.radius`. Rejects nonzero `rotate`. |
 | `typ.shapes.square` | Square fitted to the larger axis. Rejects nonzero `rotate`. |
-| `typ.shapes.triangle` | Equilateral, directional, label nudge. Honors `flip`. |
+| `typ.shapes.triangle` | Equilateral by default, with `triangle("isosceles", ratio: ..)` and `triangle("angles", angles: ..)` modes. Honors `flip`. |
 | `typ.shapes.flat-triangle` | Wide, directional. Honors `flip`. |
+| `typ.shapes.broad-triangle` | Tall, directional. Honors `flip`; useful for state/effect-like nodes. |
 | `typ.shapes.trapezoid` | Uses `style.slant`. Honors `flip`. |
 | `typ.shapes.arrow` | Uses `style.tip`. Honors `flip`. |
 | `typ.shapes.diamond` | Independently fitted rhombus. Polygon-based; supports rotation. |
 | `typ.shapes.hexagon` | Regular six-sided, established clearance. Supports rotation. |
 
-`triangle`, `flat-triangle`, `trapezoid`, and `arrow` mirror across the local
+`triangle`, `flat-triangle`, `broad-triangle`, `trapezoid`, and `arrow` mirror across the local
 y-axis (`style.flip`) *before* `style.rotate` is applied — see
 [Directional shapes and flip](../shapes.qmd#directional-shapes-and-flip).
+
+## Triangle variants
+
+`typ.shapes.triangle` is a family:
+
+```typ
+typ.shapes.triangle() // -> equilateral (default)
+typ.shapes.triangle("isosceles", ratio: 2.0)
+typ.shapes.triangle("angles", angles: (30deg, 70deg, 80deg))
+```
+
+When given `"isosceles"`, the `ratio` argument (positive number) scales the
+horizontal width relative to the base equilateral geometry. `"angles"` uses
+exactly three angle values, all of type `angle`.
+
+## Composite shape styling: `shape.parts` and marks
+
+A style can layer multiple outlines in a single node through
+`shape.parts` (dictionary key).
+
+- `shape.parts` may be an array or dictionary of part specifications.
+- Each part is a builder function (for default-style inheritance) or a
+  dictionary with an optional `shape` and any style overrides.
+- `layer: "behind"` paints a part before the base body and label;
+  `layer: "front"` is the default.
+- `transform` displaces a part by an absolute `(dx, dy)` length pair or by
+  an `{x: .., y: ..}` dictionary, in the same coordinate frame as the
+  fitted node bounds.
+- `parts` is still accepted as a legacy alias, but `shape.parts` is the
+  canonical name.
+
+Marks are also emitted as parts. `mark: "cross"` adds a centered cross glyph;
+`mark: "measurement"` adds an upper semicircle and angled arrow positioned
+from the base shape's top boundary and paints it behind the base body. Its
+arrowhead is one miter-joined contour,
+so heavy mark weights do not expose seams between its arms. Both marks respect
+mark-specific keys:
+
+- `mark-angle`
+- `mark-size`
+- `mark-thickness`
+- `mark-fill`
+- `mark-stroke`
+
+Example styles:
+
+```typ
+style: (
+  "shape.parts": (
+    (shape: typ.shapes.circle, fill: white, stroke: none),
+    (shape: typ.shapes.circle, inset: 3pt, fill: none, stroke: black),
+  ),
+  mark: "cross",
+  mark-size: 7pt,
+  mark-stroke: 0.6pt + black,
+)
+```
 
 ## Factories
 

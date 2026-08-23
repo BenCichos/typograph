@@ -23,7 +23,7 @@
 
 #let config-keys = (
   "scale", "scale-edges", "font-size", "grid", "inset", "anchor",
-  "math-axis", "baseline", "node-styles", "edge-styles",
+  "math-axis", "baseline", "port-spacing", "node-styles", "edge-styles",
 )
 
 // The defaults in force at this point in the document. Must be called from
@@ -32,7 +32,7 @@
 
 /// Sets `diagram()` defaults for everything in `body`. Accepts the same
 /// named arguments as `diagram()` — `scale`, `scale-edges`, `font-size`,
-/// `grid`, `inset`, `anchor`, `math-axis`, `baseline`, `node-styles`,
+/// `grid`, `inset`, `anchor`, `math-axis`, `baseline`, `port-spacing`, `node-styles`,
 /// `edge-styles` — and they apply to every diagram in the scope that does
 /// not override them itself:
 ///

@@ -89,6 +89,37 @@
 
 #let edge-style-keys = edge-defaults.keys()
 
+#let _validate-composite-part-list(parts, source) = {
+  assert(
+    type(parts) == array or type(parts) == dictionary,
+    message: source + " must be an array or dictionary of part specs",
+  )
+  let entries = if type(parts) == dictionary {
+    parts.pairs().map(pair => pair.at(1))
+  } else {
+    parts
+  }
+  assert(entries.len() >= 1, message: source + " must contain at least one entry")
+  for entry in entries {
+    assert(
+      type(entry) == function or type(entry) == dictionary,
+      message: source + " entries must be builder functions or dictionaries",
+    )
+    if type(entry) == dictionary and "shape" in entry {
+      assert(type(entry.shape) == function, message: source + " entry shape must be a builder function")
+    }
+  }
+}
+
+#let _validate-mark-length(value, source, allow-auto: true) = {
+  if value != auto {
+    assert(
+      type(value) == length or type(value) == ratio or type(value) == relative,
+      message: source + " must be a length, ratio, relative length, or auto",
+    )
+  }
+}
+
 /// Validates the built-in fields of an open node style. Unknown fields remain
 /// legal extension data for custom shape builders.
 #let validate-node-style(style, source: "node style") = {
@@ -101,6 +132,45 @@
       style.shape-labelled == auto or type(style.shape-labelled) == function,
       message: source + " shape-labelled must be auto or a builder function",
     )
+  }
+  if "shape.parts" in style and "parts" in style {
+    panic(
+      source + " cannot contain both shape.parts and parts; use shape.parts as the canonical key",
+    )
+  }
+  if "shape.parts" in style {
+    _validate-composite-part-list(style.at("shape.parts"), "shape.parts")
+  }
+  if "parts" in style {
+    _validate-composite-part-list(style.parts, "parts")
+  }
+  if "mark" in style {
+    assert(
+      style.mark == none or style.mark == auto
+        or style.mark == "cross" or style.mark == "measurement",
+      message: source + " mark must be none, auto, \"cross\", or \"measurement\"",
+    )
+  }
+  if "mark-angle" in style {
+    assert(type(style.mark-angle) == angle, message: source + " mark-angle must be an angle")
+  }
+  if "mark-size" in style {
+    _validate-mark-length(style.mark-size, source + " mark-size")
+  }
+  if "mark-thickness" in style {
+    _validate-mark-length(style.mark-thickness, source + " mark-thickness")
+  }
+  if "mark-fill" in style {
+    assert(
+      style.mark-fill == none
+        or type(style.mark-fill) in (color, gradient, tiling),
+      message: source + " mark-fill must be none, a color, gradient, or tiling",
+    )
+  }
+  if "mark-stroke" in style {
+    if style.mark-stroke != none and style.mark-stroke != auto {
+      let _ = stroke(style.mark-stroke)
+    }
   }
   for field in ("min-size", "min-width", "min-height") {
     if field in style {

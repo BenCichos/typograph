@@ -1,3 +1,3 @@
-#import "@preview/typograph:0.1.0" as typ
+#import "@preview/typograph:0.2.0" as typ
 
 #typ.core-diagram(())

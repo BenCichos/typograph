@@ -251,15 +251,20 @@
   outline-for(outline-at.at(node-key(node), default: ()), node)
 }
 
+#let outline-core(outline) = {
+  if outline == none { return none }
+  if outline.kind == "parts" { outline.base.outline } else { outline }
+}
+
 // Whether an outline has a genuine silhouette to clip against — a
 // zero-radius circle or a zero-extent ellipse/rect is a point, not a shape,
 // and clipping against it would manufacture an artificial epsilon-sized disk
 // instead of a true no-op.
 #let outline-is-usable(outline) = (
-  outline != none and outline.kind not in ("empty", "bare")
-    and if outline.kind == "circle" { outline.radius > 0pt }
-      else if outline.kind in ("ellipse", "rect") {
-        outline.half-width > 0pt or outline.half-height > 0pt
+  outline != none and outline-core(outline).kind not in ("empty", "bare")
+    and if outline-core(outline).kind == "circle" { outline-core(outline).radius > 0pt }
+      else if outline-core(outline).kind in ("ellipse", "rect") {
+        outline-core(outline).half-width > 0pt or outline-core(outline).half-height > 0pt
       } else { true }
 )
 
@@ -268,7 +273,7 @@
 // curve clipping.
 #let is-directed-anchor(clip, direction, outline) = (
   clip and direction != auto and outline != none
-    and outline.kind not in ("empty", "bare")
+    and outline-core(outline).kind not in ("empty", "bare")
 )
 
 // The math axis: the height above the text baseline at which `=`, `+`, `-`
@@ -347,26 +352,29 @@
 // Converts one outline to numeric screen-space points once per clipped end.
 // Re-running length conversion and trigonometric radial queries at every
 // bisection probe was substantially more expensive than the intersection.
-#let numeric-outline(outline) = if outline.kind == "circle" {
-  (kind: "circle", radius: num(outline.radius))
-} else if outline.kind == "ellipse" {
-  (
-    kind: "ellipse",
-    half-width: num(outline.half-width),
-    half-height: num(outline.half-height),
-  )
-} else if outline.kind == "rect" {
-  (
-    kind: "rect",
-    half-width: num(outline.half-width),
-    half-height: num(outline.half-height),
-    radius: num(outline.radius),
-  )
-} else {
-  (
-    kind: "polygon",
-    points: outline.points.map(point => (num(point.at(0)), num(point.at(1)))),
-  )
+#let numeric-outline(outline) = {
+  let shape = outline-core(outline)
+  if shape.kind == "circle" {
+    (kind: "circle", radius: num(shape.radius))
+  } else if shape.kind == "ellipse" {
+    (
+      kind: "ellipse",
+      half-width: num(shape.half-width),
+      half-height: num(shape.half-height),
+    )
+  } else if shape.kind == "rect" {
+    (
+      kind: "rect",
+      half-width: num(shape.half-width),
+      half-height: num(shape.half-height),
+      radius: num(shape.radius),
+    )
+  } else {
+    (
+      kind: "polygon",
+      points: shape.points.map(point => (num(point.at(0)), num(point.at(1)))),
+    )
+  }
 }
 
 // Direct screen-space containment for every supported silhouette. This is
@@ -374,54 +382,55 @@
 // polygon. Unlike a radial approximation, the predicate remains correct in
 // every filled and unfilled region of a concave silhouette.
 #let outline-contains-point(outline, center, point, unit-size) = {
+  let shape = outline-core(outline)
   let x = (point.at(0) - center.at(0)) * unit-size
   let y = -(point.at(1) - center.at(1)) * unit-size
   let epsilon = 1e-7
-  if outline.kind == "circle" {
-    return x * x + y * y <= outline.radius * outline.radius + epsilon
+  if shape.kind == "circle" {
+    return x * x + y * y <= shape.radius * shape.radius + epsilon
   }
-  if outline.kind == "ellipse" {
-    if outline.half-width <= epsilon and outline.half-height <= epsilon {
+  if shape.kind == "ellipse" {
+    if shape.half-width <= epsilon and shape.half-height <= epsilon {
       return calc.abs(x) <= epsilon and calc.abs(y) <= epsilon
     }
-    if outline.half-width <= epsilon {
-      return calc.abs(x) <= epsilon and calc.abs(y) <= outline.half-height + epsilon
+    if shape.half-width <= epsilon {
+      return calc.abs(x) <= epsilon and calc.abs(y) <= shape.half-height + epsilon
     }
-    if outline.half-height <= epsilon {
-      return calc.abs(y) <= epsilon and calc.abs(x) <= outline.half-width + epsilon
+    if shape.half-height <= epsilon {
+      return calc.abs(y) <= epsilon and calc.abs(x) <= shape.half-width + epsilon
     }
     return (
-      (x / outline.half-width) * (x / outline.half-width)
-        + (y / outline.half-height) * (y / outline.half-height)
+      (x / shape.half-width) * (x / shape.half-width)
+        + (y / shape.half-height) * (y / shape.half-height)
         <= 1 + epsilon
     )
   }
-  if outline.kind == "rect" {
+  if shape.kind == "rect" {
     let ax = calc.abs(x)
     let ay = calc.abs(y)
-    if ax > outline.half-width + epsilon or ay > outline.half-height + epsilon {
+    if ax > shape.half-width + epsilon or ay > shape.half-height + epsilon {
       return false
     }
     let radius = calc.min(
-      calc.max(outline.radius, 0),
-      outline.half-width,
-      outline.half-height,
+      calc.max(shape.radius, 0),
+      shape.half-width,
+      shape.half-height,
     )
     if (
       radius <= epsilon
-        or ax <= outline.half-width - radius
-        or ay <= outline.half-height - radius
+        or ax <= shape.half-width - radius
+        or ay <= shape.half-height - radius
     ) { return true }
-    let dx = ax - (outline.half-width - radius)
-    let dy = ay - (outline.half-height - radius)
+    let dx = ax - (shape.half-width - radius)
+    let dy = ay - (shape.half-height - radius)
     return dx * dx + dy * dy <= radius * radius + epsilon
   }
 
   let inside = false
   let on-boundary = false
-  for index in range(outline.points.len()) {
-    let a = outline.points.at(index)
-    let b = outline.points.at(calc.rem(index + 1, outline.points.len()))
+  for index in range(shape.points.len()) {
+    let a = shape.points.at(index)
+    let b = shape.points.at(calc.rem(index + 1, shape.points.len()))
     let cross = (
       (b.at(0) - a.at(0)) * (y - a.at(1))
         - (b.at(1) - a.at(1)) * (x - a.at(0))
@@ -545,6 +554,7 @@
   } else {
     resolved.segments.at(index - 1).end
   }
+  let shape = outline-core(outline)
   let outline = numeric-outline(outline)
   let unit-size = num(unit)
 
@@ -552,7 +562,7 @@
     for index in range(resolved.segments.len()) {
       let start = segment-start(index)
       let segment = resolved.segments.at(index)
-      if segment.kind == "line" and outline.kind == "polygon" {
+      if segment.kind == "line" and shape.kind == "polygon" {
         let crossing = polygon-line-crossing(
           outline,
           center,
@@ -614,7 +624,7 @@
   while index >= 0 {
     let start = segment-start(index)
     let segment = resolved.segments.at(index)
-    if segment.kind == "line" and outline.kind == "polygon" {
+    if segment.kind == "line" and shape.kind == "polygon" {
       let crossing = polygon-line-crossing(
         outline,
         center,
@@ -753,12 +763,8 @@
   let work = item
   let start-center = work.waypoints.first().end
   let end-center = work.waypoints.last().end
-  let remaining-start = if (
-    start-outline != none and start-outline.kind not in ("empty", "bare")
-  ) { start-outline } else { none }
-  let remaining-end = if (
-    end-outline != none and end-outline.kind not in ("empty", "bare")
-  ) { end-outline } else { none }
+  let remaining-start = if outline-is-usable(start-outline) { start-outline } else { none }
+  let remaining-end = if outline-is-usable(end-outline) { end-outline } else { none }
 
   if remaining-start != none and work.from != auto {
     work = anchor-directed-waypoint(work, 0, work.from, remaining-start, unit)
@@ -787,7 +793,11 @@
 
 // Resolves every deferred waypoint on one edge, left to right so that a
 // chain of `rel()`s each builds on the point before it.
-#let resolve-deferred-waypoints(item, outline-at, by-name, unit) = {
+#let resolve-deferred-waypoints(
+  item, outline-at, by-name, unit,
+  port-spacing: auto,
+  size-factor: 1,
+) = {
   let done = ()
   let previous = none
   for wp in item.waypoints {
@@ -806,12 +816,18 @@
           outline != none,
           message: "port() refers to a gate that is not in this diagram — is it connected, or emitted?",
         )
+        let resolved-port-spacing = deferred.node.at("port-spacing", default: auto)
+        if resolved-port-spacing == auto { resolved-port-spacing = port-spacing }
+        if resolved-port-spacing != auto {
+          resolved-port-spacing *= deferred.node.size-scale * size-factor
+        }
         let (dx, dy) = gate-port-on-outline(
           outline,
           deferred.node.legs,
           deferred.side,
           deferred.index,
           rotate: deferred.at("rotate", default: 0deg),
+          port-spacing: resolved-port-spacing,
         )
         // Offsets come back in pt; edge geometry works in diagram units.
         resolved.end = (
@@ -891,6 +907,7 @@
   edge-styles: auto,
   inset: auto,
   scale-edges: auto,
+  port-spacing: auto,
   anchor: auto,
   math-axis: auto,
   baseline: auto,
@@ -911,11 +928,13 @@
   let grid = pick(grid, "grid", false)
   let font-size = pick(font-size, "font-size", auto)
   let baseline = pick(baseline, "baseline", auto)
+  let port-spacing = pick(port-spacing, "port-spacing", 7pt)
   assert(type(grid) == bool, message: "diagram grid must be a boolean")
   assert(
     font-size == auto or (type(font-size) == length and font-size > 0pt),
     message: "diagram font-size must be auto or a positive length",
   )
+  assert(type(port-spacing) == length and port-spacing > 0pt, message: "diagram port-spacing must be a positive length")
   // `scale` zooms the whole diagram; `scale-edges` then stretches only the
   // coordinate grid, spreading nodes further apart without resizing them.
   // Resolved to an absolute length here: `scale: 1.2em` is only meaningful
@@ -1011,12 +1030,26 @@
       override: node-styles.at(node.kind, default: (:)),
       font-size: font-size,
       size-factor: size-factor,
+      port-spacing: port-spacing,
     )
     let size = outline-size(prep.outline, prep.measured)
+    let outline-kind = if prep.outline.kind == "parts" {
+      prep.outline.base.outline.kind
+    } else {
+      prep.outline.kind
+    }
     let outset = stroke-outset(
       prep.style.stroke,
-      miter: prep.outline.kind == "polygon",
+      miter: outline-kind == "polygon",
     )
+    if prep.outline.kind == "parts" {
+      for part in prep.outline.parts {
+        outset = calc.max(
+          outset,
+          stroke-outset(part.stroke, miter: part.outline.kind == "polygon"),
+        )
+      }
+    }
     let position = pt((node.x, node.y))
     drawn-nodes.push((
       position: position,
@@ -1112,7 +1145,11 @@
             local-names.insert(name, hit)
           }
         }
-        resolve-deferred-waypoints(item, local-outlines, local-names, unit)
+        resolve-deferred-waypoints(
+          item, local-outlines, local-names, unit,
+          port-spacing: port-spacing,
+          size-factor: size-factor,
+        )
       }
       // Resolve the complete style once. Clipping, bounds and emission all use
       // this same value, preventing precedence drift and repeated dictionary

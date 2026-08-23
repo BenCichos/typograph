@@ -4,6 +4,7 @@
 #config(
   scale: 0.8cm,
   baseline: 6pt,
+  port-spacing: 8pt,
   node-styles: (z: (fill: red), x: (fill: blue)),
   edge-styles: (highlight-width: 4pt),
 )[
@@ -15,6 +16,7 @@
       let current = current-defaults()
       assert(current.scale == 0.8cm)
       assert(current.baseline == 6pt)
+      assert(current.port-spacing == 8pt)
       assert(current.node-styles.z.fill == red)
       assert(current.node-styles.z.stroke == 1pt + black)
       assert(current.node-styles.x.fill == blue)
@@ -26,6 +28,7 @@
     let current = current-defaults()
     assert(current.scale == 0.8cm)
     assert(current.baseline == 6pt)
+    assert(current.port-spacing == 8pt)
     assert(current.node-styles.z.fill == red)
     assert("stroke" not in current.node-styles.z)
     assert(current.edge-styles.highlight-width == 4pt)
@@ -37,6 +40,7 @@
   let current = current-defaults()
   assert("scale" not in current)
   assert("baseline" not in current)
+  assert("port-spacing" not in current)
   assert("node-styles" not in current)
   assert("edge-styles" not in current)
 }

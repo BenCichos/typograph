@@ -61,6 +61,114 @@ those leads dead straight regardless of the gate's label or scale — see
 [Deferred endpoints](edges.qmd#deferred-endpoints) for why that offset has to
 be deferred instead of computed up front.
 
+## Circuit constructors (companion package)
+
+For a focused quantum-circuit style, import the companion package:
+
+```typ
+#import "@preview/typograph-circuit:0.1.0": measurement, state, effect, discard, unitary, phase, control, target, control_dot, open_control, swap, ancilla, cnot, cz, cswap, barrier, displacement, squeezer, beamsplitter, homodyne, circuit
+```
+
+Then call with the helper wrapper:
+
+```typ
+#circuit(levels => {
+  let a = measurement(0, levels.qubit, label: [M])
+  let b = state(1, levels.wire, label: [\|0⟩])
+  let c = effect(2, levels.register)
+  typ.edge(a, b)
+  typ.edge(b, c)
+})
+```
+
+The companion package also exports `diagram`, so existing `typ.diagram`-style
+layouts can keep their structure and just swap in a themed import.
+
+The optional `circuit(...)` helper in that package is a thin wrapper around
+`typ.diagram(...)` that keeps defaults stable. Pass a function body to receive
+a `levels` dictionary with semantic y-level names:
+
+- `qubit` (default `0`)
+- `wire` (default `0`)
+- `register` (default `-1`)
+- `label` (default `1`)
+
+Plain content bodies remain accepted when semantic levels are not needed.
+
+Circuit constructors are still ordinary generic nodes under the hood:
+
+- `measurement(...)` is a white gate whose semicircle and arrow paint behind
+  the box while retaining independent body/mark strokes.
+- `state(...)` points left and accepts any number of ports only on its flat
+  right side; `effect(...)` points right and accepts ports only on its flat
+  left side. Tip-side ports are rejected.
+- `discard(...)` preserves the hollow circle-with-cross terminal marker.
+- `control(...)`/`target(...)` create mirrored gate forms for CNOT-style
+  control wiring.
+- `control_dot(...)` (aka control-dot) is a compact filled control marker.
+- `open_control(...)` is the hollow control-on-zero variant.
+- `swap(...)` is a plain diagonal cross marker; connected wires run to its center.
+- `ancilla(...)` is a small cross-marked symbol for scratch ancilla lines.
+- `cnot(control-x, control-y, target-x, target-y, ...)` composes both plus
+  the connecting control wire in one call.
+- `unitary(...)` is a generic labelled one- or multi-wire gate box; `phase(...)`
+  provides the compact circular phase form.
+- `cz(...)` / `controlled_z(...)` and `cswap(...)` / `fredkin(...)` provide
+  standard controlled-Z and controlled-SWAP compositions.
+- `barrier(...)` draws a local dashed circuit barrier; `input_label(...)` and
+  `output_label(...)` place endpoint labels without introducing special nodes.
+
+The filled `control(...)` and `control_dot(...)` markers default to `5pt`.
+Use `size: 9pt` for a direct per-instance override, or `style: (min-size: 9pt)`
+when composing style dictionaries.
+
+This focused vocabulary follows the recurring elements in the
+[Quill circuit package](https://github.com/Mc-Zen/quill),
+[IBM circuit visualizations](https://quantum.cloud.ibm.com/docs/en/guides/visualize-circuits),
+and [Microsoft's circuit notation guide](https://quantum.microsoft.com/en-us/insights/education/concepts/quantum-circuits).
+
+The circuit theme also exposes wire presets you can pass through `preset:`:
+
+- `quantum`
+- `classical`
+- `dotted` / `dotted-delay`
+- `measurement-output`
+
+Convenience constructors for the same presets are exported as:
+`quantum`, `classical`, `dotted_delay`, and `measurement_output`.
+
+State/effect flat sides have no maximum port count. Their port centers use
+the diagram's exact `7pt` default spacing, so labels cannot make corresponding
+wires diverge. Override with `port-spacing:` on one gate, on `diagram(...)`,
+or document-wide through `#show: typ.config.with(port-spacing: 8pt)`.
+Other gate-style constructors retain `max-legs-per-side` where applicable:
+
+```typ
+state(0, 0, legs: (right: 8), port-spacing: 6pt)
+effect(2, 0, legs: (left: 8)) // inherits diagram/config spacing
+cnot(0, 0, 1, 0, control-legs: (right: 2), target-legs: (left: 2), max-legs-per-side: 2)
+```
+
+### Continuous-variable gates
+
+The theme includes photonic/CV constructors for `displacement`, `squeezer`,
+`phase_shift`, `beamsplitter`, `two_mode_squeezer`,
+`cv_controlled_addition`, `cv_controlled_phase`, `cubic_phase`, `kerr`,
+`cross_kerr`, `homodyne`, `heterodyne`, `photon_number_measurement`,
+`vacuum`, and `fock_state`. Labels remain overridable content, and two-mode
+constructors default to two ports on each side.
+
+This selection follows the official
+[PennyLane CV operator reference](https://docs.pennylane.ai/en/stable/introduction/operations.html)
+and [Strawberry Fields photonic circuit examples](https://strawberryfields.ai/photonics/demos/run_boson_sampling.html).
+
+```typ
+typ.edge(measurement(0, 0), state(1, 0), preset: "quantum")
+typ.edge(state(1, 0), effect(2, 0), preset: "classical")
+typ.edge(measurement(2, 0), effect(3, 0), preset: "dotted-delay")
+typ.edge(ancilla(4, 1), state(5, 1), preset: "measurement-output")
+```
+
 ## Reusable node types: `node-type()`
 
 Most named nodes — `z`, `x`, a project's own `process` or `pentagon` — are

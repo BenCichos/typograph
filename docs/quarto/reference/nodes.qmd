@@ -15,11 +15,157 @@ typ.box(x, y, label: none, fill: auto, stroke: auto, inset: auto, radius: auto, 
 Generic rectangle; direct appearance arguments layer at the call site.
 
 ```typ
-typ.gate(x, y, label, legs: (left: 1, right: 1), size: auto, inset: auto, name: none, style: (:), kind: "gate")
+typ.gate(
+  x, y, label,
+  legs: (left: 1, right: 1),
+  max-legs-per-side: none,
+  port-spacing: auto,
+  size: auto,
+  inset: auto,
+  name: none,
+  style: (:),
+  kind: "gate",
+)
 ```
 Labelled, port-capable. `legs` values are non-negative integers; automatic
 minimum size grows with the largest count per axis; `size: (w, h)` overrides
-it. `kind:` selects the theme preset independently of port capability.
+it. `max-legs-per-side` (when not `none`) rejects any side with too many
+ports. `port-spacing:` sets an exact positive distance between neighboring
+port centers; `auto` inherits the diagram/config value. `kind:` selects the
+theme preset independently of port capability.
+
+```typ
+measurement(x, y, label: none, name: none, style: (:), legs: (right: 1), max-legs-per-side: 1)
+
+state(x, y, label: none, name: none, style: (:), legs: (right: 1), port-spacing: auto)
+
+effect(x, y, label: none, name: none, style: (:), legs: (left: 1), port-spacing: auto)
+
+discard(x, y, label: none, name: none, style: (:), legs: (left: 1), max-legs-per-side: 1)
+
+control(
+  x, y, label: none,
+  name: none,
+  style: (:),
+  size: auto,
+  legs: (right: 1),
+  max-legs-per-side: 1,
+  flip: auto,
+)
+
+target(
+  x, y, label: none,
+  name: none,
+  style: (:),
+  legs: (left: 1),
+  max-legs-per-side: 1,
+  flip: auto,
+)
+
+cnot(
+  control-x,
+  control-y,
+  target-x,
+  target-y,
+  control-label: none,
+  target-label: none,
+  control-style: (:),
+  target-style: (:),
+  wire-style: (:),
+  control-size: auto,
+  control-legs: (right: 1),
+  target-legs: (left: 1),
+  max-legs-per-side: 1,
+)
+
+control_dot(
+  x, y,
+  label: none,
+  name: none,
+  style: (:),
+  size: auto,
+  legs: (right: 1),
+  max-legs-per-side: 1,
+  flip: auto,
+)
+
+open_control(
+  x, y,
+  label: none,
+  name: none,
+  style: (:),
+  size: auto,
+  legs: (right: 1),
+  max-legs-per-side: 1,
+)
+
+swap(
+  x, y,
+  label: none,
+  name: none,
+  style: (:),
+  flip: auto,
+)
+
+ancilla(x, y, label: none, name: none, style: (:))
+
+unitary(
+  x, y, label,
+  name: none,
+  style: (:),
+  legs: (left: 1, right: 1),
+  max-legs-per-side: none,
+  size: auto,
+  inset: auto,
+)
+
+phase(x, y, label: none, name: none, style: (:), legs: (left: 1, right: 1), max-legs-per-side: 1)
+
+cz(control-x, control-y, target-x, target-y, control-style: (:), target-style: (:), wire-style: (:), control-size: auto, target-size: auto)
+
+cswap(control-x, control-y, upper-x, upper-y, lower-x, lower-y, control-style: (:), upper-style: (:), lower-style: (:), wire-style: (:), control-size: auto)
+
+barrier(x, start-y, end-y, style: (:))
+
+input_label(x, y, body)
+
+output_label(x, y, body)
+
+displacement(x, y, label: [$D(alpha)$], name: none, style: (:), legs: (left: 1, right: 1))
+
+squeezer(x, y, label: [$S(z)$], name: none, style: (:), legs: (left: 1, right: 1))
+
+phase_shift(x, y, label: [$R(phi)$], name: none, style: (:), legs: (left: 1, right: 1))
+
+beamsplitter(x, y, label: [$BS(theta, phi)$], name: none, style: (:), legs: (left: 2, right: 2))
+
+two_mode_squeezer(x, y, label: [$S_2(z)$], name: none, style: (:), legs: (left: 2, right: 2))
+
+cv_controlled_addition(x, y, label: [$CX(s)$], name: none, style: (:), legs: (left: 2, right: 2))
+
+cv_controlled_phase(x, y, label: [$CZ(s)$], name: none, style: (:), legs: (left: 2, right: 2))
+
+cubic_phase(x, y, label: [$V(gamma)$], name: none, style: (:), legs: (left: 1, right: 1))
+
+kerr(x, y, label: [$K(kappa)$], name: none, style: (:), legs: (left: 1, right: 1))
+
+cross_kerr(x, y, label: [$CK(kappa)$], name: none, style: (:), legs: (left: 2, right: 2))
+
+homodyne(x, y, label: [$x$], name: none, style: (:), legs: (left: 1, right: 1))
+
+heterodyne(x, y, label: [$alpha$], name: none, style: (:), legs: (left: 1, right: 1))
+
+photon_number_measurement(x, y, label: [$n$], name: none, style: (:), legs: (left: 1, right: 1))
+
+vacuum(x, y, label: [$0$], name: none, style: (:), legs: (right: 1))
+
+fock_state(x, y, label: [$n$], name: none, style: (:), legs: (right: 1))
+```
+
+These are convenience constructors exported by
+`@preview/typograph-circuit:0.1.0`.
+`controlled_z` aliases `cz`; `fredkin` aliases `cswap`. Marker `size:` is a
+positive length or `auto`; the filled and open controls default to `5pt`.
 
 ```typ
 typ.port(node, side, index: 0)

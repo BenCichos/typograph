@@ -15,6 +15,7 @@ typ.diagram(
   edge-styles: auto,
   inset: auto,
   scale-edges: auto,
+  port-spacing: auto,
   anchor: auto,
   math-axis: auto,
   baseline: auto,
@@ -28,6 +29,7 @@ typ.diagram(
 | `theme` | The explicit, atomic theme value. Never inherited from `config()`. |
 | `scale` | Coordinate unit and overall zoom. A number is a multiple of `1cm`; a length is exact. Node sizes, labels, strokes, and coordinates all follow it. |
 | `scale-edges` | Positive multiplier applied only to coordinate spacing — lengthens wires without enlarging nodes. |
+| `port-spacing` | Positive length between neighboring gate ports. Defaults to `7pt`; a gate's own `port-spacing:` wins. |
 | `grid` | Boolean; `true` overlays a light integer coordinate grid, useful while authoring. |
 | `font-size` | `auto` or a positive length; sets node/edge label size. A node's `style.font-size` or an edge's `style.label-size` wins over this for that one label. |
 | `node-styles` | Maps kinds to partial node styles, for this diagram only. |
@@ -56,7 +58,7 @@ built-in defaults. `theme` is not part of that inheritance chain.
 ```typ
 typ.config(
   body,
-  scale: .., scale-edges: .., font-size: .., grid: .., inset: ..,
+  scale: .., scale-edges: .., port-spacing: .., font-size: .., grid: .., inset: ..,
   anchor: .., math-axis: .., baseline: ..,
   node-styles: .., edge-styles: ..,
 )

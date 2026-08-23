@@ -1,6 +1,6 @@
 // Compiles through the manifest/package loader rather than a source-relative
 // import, catching entrypoint and facade regressions.
-#import "@preview/typograph:0.1.0" as typ
+#import "@preview/typograph:0.2.0" as typ
 
 #let diagram = typ.diagram
 

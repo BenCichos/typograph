@@ -22,7 +22,7 @@ one thing. This project keeps them separate:
 Nothing from either package is applied unless a document asks for it:
 
 ```typ
-#import "@preview/typograph:0.1.0" as typ
+#import "@preview/typograph:0.2.0" as typ
 #import "@preview/typograph-zx:0.1.0" as zx
 #let diagram = typ.diagram.with(theme: zx.theme)
 ```

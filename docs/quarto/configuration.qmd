@@ -11,7 +11,7 @@ change that. The three mechanisms cover the same ground `#set` would have:
 Typst's own partial application, free at runtime:
 
 ```typ
-#let diagram = typ.diagram.with(theme: my-theme, scale: 0.8cm, font-size: 9pt)
+#let diagram = typ.diagram.with(theme: my-theme, scale: 0.8cm, font-size: 9pt, port-spacing: 8pt)
 ```
 
 Bind this once near the top of a document (or a project's shared theme
@@ -32,7 +32,7 @@ involvement at all.
 ```typ
 typ.config(
   body,
-  scale: .., scale-edges: .., font-size: .., grid: .., inset: ..,
+  scale: .., scale-edges: .., port-spacing: .., font-size: .., grid: .., inset: ..,
   anchor: .., math-axis: .., baseline: ..,
   node-styles: .., edge-styles: ..,
 )
@@ -45,7 +45,7 @@ control the call sites of — an `#include`d chapter, or a template applied
 `#show: template.with(..)` over a whole document:
 
 ```typ
-#show: typ.config.with(font-size: 9pt, scale: 0.8cm)   // whole document
+#show: typ.config.with(font-size: 9pt, scale: 0.8cm, port-spacing: 8pt)   // whole document
 ```
 
 or scoped to one section:

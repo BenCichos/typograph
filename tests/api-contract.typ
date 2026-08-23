@@ -1,14 +1,12 @@
 // Public construction and extension contracts. A clean compile means every
 // assertion passed.
 #import "/src/lib.typ" as typ
-#import "/src/node.typ": shape-outline, shape-radius
+#import "/src/node.typ": shape-outline, shape-radius, side-port-offset
 #import "/src/edge.typ": (
   resolve-edge-path, path-start-direction, path-end-direction,
 )
 #import "/src/diagram.typ": resolve-clipped-edge
-
 #let diagram = typ.diagram
-
 // Local fixtures standing in for a real theme's kinds. `dot` is a plain
 // circle; `pointer` reuses the built-in arrow builder specifically for its
 // asymmetric tip, needed below to test directed clipping against a
@@ -58,6 +56,10 @@
 // Explicit convenience arguments are call-site intent and beat style bags.
 #assert(typ.box(0, 0, fill: red, style: (fill: blue)).first().style.fill == red)
 #assert(typ.gate(0, 0, [U], inset: 2pt, style: (inset: 9pt)).first().style.inset == 2pt)
+#assert(typ.gate(0, 0, [U], port-spacing: 9pt).first().port-spacing == 9pt)
+#assert(side-port-offset(3, 20pt, 0, spacing: 7pt) == -7pt)
+#assert(side-port-offset(3, 20pt, 1, spacing: 7pt) == 0pt)
+#assert(side-port-offset(3, 20pt, 2, spacing: 7pt) == 7pt)
 // flippable: true is a node-type() option, not special-cased per kind — any
 // directional semantic constructor that opts in gets the same flip: sugar.
 #assert(pointer(0, 0, flip: true).first().style.flip == true)

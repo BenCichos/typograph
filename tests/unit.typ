@@ -170,6 +170,22 @@
   "merge-style: none/auto overrides are no-ops",
   merge-style((a: 1), none, auto) == (a: 1),
 )
+#check(
+  "resolve-node-style accepts legacy parts for shape composition",
+  resolve-node-style("node", (:), (
+    shape: shapes.circle,
+    parts: (shapes.triangle,),
+  )).at("parts", default: none) != none,
+)
+#check(
+  "resolve-node-style accepts shape.parts and cross-mark metadata",
+  resolve-node-style("node", (:), (
+    shape: shapes.circle,
+    "shape.parts": (shapes.triangle,),
+    mark: "cross",
+    mark-size: 6pt,
+  )).at("mark") == "cross",
+)
 
 == edge.typ (path resolution — pure, no context needed)
 
@@ -302,6 +318,10 @@
 #let gn = g.first()
 #check("gate() records requested leg counts", gn.legs == (left: 2, right: 1))
 #check("gate() has no baked-in size (it is measured at layout)", gn.size == auto)
+#check(
+  "gate() respects max-legs-per-side when provided",
+  gate(0, 0, [U], legs: (left: 1, right: 2), max-legs-per-side: 2).first().legs == (left: 1, right: 2),
+)
 #let p0 = port(g, "right", index: 0)
 #check("port() carries a reference back to its gate (for edge auto-capture)", p0.node == gn)
 #check("port() records which attachment point it means", (p0.side, p0.index) == ("right", 0))

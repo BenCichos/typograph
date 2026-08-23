@@ -1,6 +1,6 @@
 [package]
 name = "typograph"
-version = "0.1.0"
+version = "0.2.0"
 entrypoint = "src/lib.typ"
 authors = ["Benjamin Cichos <https://github.com/BenCichos>"]
 license = "MIT"

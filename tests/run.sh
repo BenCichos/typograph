@@ -15,7 +15,7 @@ trap 'rm -rf "$TEST_TMP"' EXIT
 # through the manifest/package loader at the exact path this package will
 # ship under once published, to catch entrypoint/facade regressions.
 if ! mkdir -p "$TEST_TMP/packages/preview/typograph" \
-  || ! ln -s "$PWD" "$TEST_TMP/packages/preview/typograph/0.1.0"; then
+  || ! ln -s "$PWD" "$TEST_TMP/packages/preview/typograph/0.2.0"; then
   echo "could not stage local package fixture" >&2
   exit 1
 fi
@@ -54,6 +54,9 @@ expected_error() {
     edge-too-few-waypoints.typ) echo "needs at least 2 waypoints" ;;
     edge-unknown-preset.typ) echo "unknown edge preset" ;;
     gate-invalid-legs.typ) echo "gate leg counts must be non-negative integers" ;;
+    gate-max-legs-per-side.typ) echo "gate legs exceed max-legs-per-side" ;;
+    gate-port-spacing.typ) echo "gate port-spacing must be auto or a positive length" ;;
+    diagram-port-spacing.typ) echo "diagram port-spacing must be a positive length" ;;
     group-bad-pivot.typ) echo "group pivot must be a numeric" ;;
     lib-private-alias.typ) echo 'module `typograph` does not contain `core-diagram`' ;;
     make-node-reserved-field.typ) echo "extra fields cannot replace reserved field" ;;
@@ -65,6 +68,9 @@ expected_error() {
     node-inset-unknown.typ) echo "node style inset has unknown key" ;;
     node-style-min-size.typ) echo "min-size must be a non-negative length" ;;
     node-style-rotate.typ) echo "rotate must be an angle" ;;
+    node-style-bad-mark.typ) echo "node style mark must be none, auto, \"cross\", or \"measurement\"" ;;
+    node-style-bad-parts.typ) echo "parts must be an array or dictionary of part specs" ;;
+    node-style-parts-conflict.typ) echo "cannot contain both shape.parts and parts" ;;
     place-logical-align.typ) echo "place align must use physical" ;;
     polygon-outline-boundary.typ|polygon-outline-origin.typ) echo "requires the node origin strictly inside the polygon" ;;
     port-bad-side-index.typ|port-negative-index.typ|port-non-integer-index.typ) echo "gate has no port" ;;
@@ -76,6 +82,7 @@ expected_error() {
     shape-bad-label-offset.typ) echo "outline label-offset must be an absolute-length pair" ;;
     shape-invisible-label-offset.typ) echo "outlines cannot use label-offset" ;;
     shape-labelled-string.typ) echo "shape-labelled must be auto or a builder function" ;;
+    triangle-angles-bad.typ) echo "triangle(\"angles\") entries must be angles" ;;
     shape-polygon-anchor.typ) echo "requires its anchor inside the polygon" ;;
     shape-polygon-points.typ) echo "needs at least three numeric point pairs" ;;
     shape-regular-vertices.typ) echo "vertices must be an integer of at least 3" ;;

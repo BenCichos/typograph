@@ -6,7 +6,7 @@
 ///
 /// Typical usage (diagram coordinates are math-convention: x right, y up):
 /// ```typc
-/// #import "@preview/typograph:0.1.0" as typ
+/// #import "@preview/typograph:0.2.0" as typ
 ///
 /// #typ.diagram({
 ///   let a = typ.node(0, 0, label: [A], style: (shape: typ.shapes.circle, fill: aqua))
@@ -17,9 +17,9 @@
 /// })
 /// ```
 ///
-/// For a complete, ready-to-use visual language built on this engine, see
-/// the `typograph-zx` package (ZX-calculus and continuous-variable ZX
-/// notation).
+/// For complete, ready-to-use visual languages built on this engine, see
+/// `typograph-zx` for ZX-calculus notation and `typograph-circuit` for
+/// quantum-circuit and continuous-variable circuit notation.
 
 #import "node.typ": (
   make-node, node-type, node, box, gate, port,

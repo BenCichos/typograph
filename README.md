@@ -16,7 +16,7 @@ notation), built entirely on this package's public API.
 ## Install and import
 
 ```typ
-#import "@preview/typograph:0.1.0" as typ
+#import "@preview/typograph:0.2.0" as typ
 ```
 
 ## Quick start

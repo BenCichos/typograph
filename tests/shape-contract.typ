@@ -45,7 +45,24 @@
 #assert(outline(typ.shapes.rect).kind == "rect")
 #assert(outline(typ.shapes.square).kind == "rect")
 #assert(outline(typ.shapes.triangle).kind == "polygon")
+#let isosceles-triangle = outline(typ.shapes.triangle("isosceles", ratio: 0.5))
+#let default-triangle = outline(typ.shapes.triangle)
+#let isosceles-by-mode = outline(typ.shapes.triangle(mode: "isosceles", ratio: 0.5))
+#let isos-range = calc.max(..isosceles-triangle.points.map(point => point.at(0)))
+  - calc.min(..isosceles-triangle.points.map(point => point.at(0)))
+#let default-range = calc.max(..default-triangle.points.map(point => point.at(0)))
+  - calc.min(..default-triangle.points.map(point => point.at(0)))
+#assert(isos-range < default-range)
+#let flipped-isos = outline(typ.shapes.triangle("isosceles", ratio: 0.5), flip: true)
+#let isosceles-xs = isosceles-triangle.points.map(point => point.at(0))
+#let flipped-xs = flipped-isos.points.map(point => point.at(0))
+#assert(approx-length(calc.max(..isosceles-xs), -calc.min(..flipped-xs)))
+#assert(approx-length(calc.min(..isosceles-xs), -calc.max(..flipped-xs)))
+#let angled = outline(typ.shapes.triangle("angles", angles: (20deg, 220deg, 100deg)))
+#assert(angled.kind == "polygon" and angled.points.len() == 3)
+#assert(isosceles-by-mode.kind == "polygon" and isosceles-by-mode.points.len() == 3)
 #assert(outline(typ.shapes.hexagon).points.len() == 6)
+#assert(outline(typ.shapes.broad-triangle).kind == "polygon")
 
 #let pill = outline(typ.shapes.stadium)
 #assert(pill.kind == "rect")
@@ -80,6 +97,21 @@
   ((1e-12, 0), (-5e-13, 8.660254e-13), (-5e-13, -8.660254e-13)),
 )
 #assert(outline(tiny-triangle, label: []).points.len() == 3)
+
+// ZXDraw previews custom styles with an unlabelled sample. A valid polygon
+// must not collapse when that sample has no label, inset, or minimum size.
+#let unlabelled-triangle = typ.shapes.polygon(
+  ((-1, 0), (1, -1), (1, 1)),
+  anchor: (0, 0),
+)
+#let unlabelled-outline = shape-outline(
+  typ.resolve-node-style("node", (:), (shape: unlabelled-triangle)),
+  [],
+  (width: 0pt, height: 0pt),
+)
+#assert(unlabelled-outline.half-width > 0pt)
+#assert(unlabelled-outline.half-height > 0pt)
+#assert(unlabelled-outline.points.len() == 3)
 
 // An arbitrary polygon is normalized about its anchor, scaled uniformly to
 // its label box, and exposes accurate bounds after per-node rotation.
@@ -143,6 +175,52 @@
 #assert(shifted-bounds.left == -5pt)
 #assert(shifted-bounds.right == 20pt + measured.width / 2)
 #assert(shifted-bounds.width == shifted-bounds.right - shifted-bounds.left)
+
+#let cross-style = typ.resolve-node-style("node", (:), (
+  shape: typ.shapes.circle,
+  min-width: 20pt,
+  min-height: 12pt,
+  inset: 2pt,
+  "shape.parts": (
+    (
+      shape: typ.shapes.triangle("isosceles", ratio: 0.55),
+      fill: none,
+      stroke: 0.6pt + black,
+      transform: (0pt, -1pt),
+      min-width: 12pt,
+      min-height: 6pt,
+    ),
+  ),
+  mark: "cross",
+  mark-stroke: 0.6pt + black,
+  mark-size: 6pt,
+  mark-thickness: 0.6pt,
+))
+#let cross-state = shape-outline(
+  cross-style,
+  [],
+  measured,
+)
+#assert(cross-state.kind == "parts")
+#assert(cross-state.parts.len() == 2)
+
+#let measurement-mark = shape-outline(
+  style(
+    typ.shapes.rect,
+    mark: "measurement",
+    mark-stroke: 1.2pt + red,
+    mark-size: 14pt,
+    mark-angle: -45deg,
+  ),
+  [],
+  measured,
+)
+#assert(measurement-mark.kind == "parts")
+#assert(measurement-mark.parts.len() == 3)
+#assert(measurement-mark.parts.all(part => part.layer == "behind"))
+#let measurement-bounds = outline-size(measurement-mark, measured)
+#assert(measurement-bounds.left < 0pt and measurement-bounds.right > 0pt)
+#assert(measurement-bounds.top < -measurement-mark.base.outline.half-height)
 
 // shape-labelled is also a builder, so users can opt into a different form
 // without coupling a node kind to either geometry.
