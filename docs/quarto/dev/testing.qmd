@@ -10,13 +10,13 @@ documentation-source compilation; a generated-SVG staleness check; and every
 expected-failure (negative) test. It stages a throwaway local package first:
 
 ```bash
-mkdir -p "$TEST_TMP/packages/local/cvzx"
-ln -s "$PWD" "$TEST_TMP/packages/local/cvzx/0.2.0"
+mkdir -p "$TEST_TMP/packages/preview/typograph"
+ln -s "$PWD" "$TEST_TMP/packages/preview/typograph/0.2.1"
 export TYPST_PACKAGE_PATH="$TEST_TMP/packages"
 ```
 
 a symlink into the checkout itself, so every test compiles against
-`@local/cvzx:0.2.0` exactly as an end user would `#import` it, without
+`@preview/typograph:0.2.1` exactly as an end user would `#import` it, without
 actually publishing anything. This site's own figure sources
 (`docs/img/*.typ`) instead import `../../src/lib.typ` directly, since they're
 compiled with `--root .` from inside the checkout rather than through the
@@ -28,7 +28,7 @@ different ways a document can reach it (see
 
 `tests/unit.typ`, `api-contract.typ`, `theme-contract.typ`,
 `shape-contract.typ`, `config-contract.typ`, `package-contract.typ`,
-`smoke.typ`, `highlight-waypoints.typ`, and the three stress fixtures all
+`smoke.typ`, `highlight-waypoints.typ`, `user.typ`, and the three stress fixtures all
 have to compile cleanly. A contract test is, in effect, "every documented
 usage pattern for this area actually runs" — when a page in this site
 shows a code snippet that isn't already backed by a rendered figure (and

@@ -9,14 +9,16 @@ of its own. No CeTZ, no LaTeX/TikZ dependency.
 
 It has no opinion about what a node should look like. A document supplies
 that itself through per-call `style:` dictionaries, or through a theme —
-see [`typograph-zx`](https://github.com/BenCichos/typograph-zx) for a
-complete, ready-to-use one (ZX-calculus and continuous-variable ZX-calculus
-notation), built entirely on this package's public API.
+see [`typograph-zx`](https://github.com/BenCichos/typograph-zx) for
+ZX-calculus notation and
+[`typograph-circuit`](https://github.com/BenCichos/typograph-circuit) for
+quantum-circuit and continuous-variable circuit notation. Both are built
+entirely on this package's public API.
 
 ## Install and import
 
 ```typ
-#import "@preview/typograph:0.2.0" as typ
+#import "@preview/typograph:0.2.1" as typ
 ```
 
 ## Quick start

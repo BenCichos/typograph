@@ -8,6 +8,20 @@
   polygon-radius, rotate-point, orient-points,
 )
 
+// Multiplies every length in an `inset:` spec, whichever form it took. This
+// lives before the part scaler because Typst bindings are not forward-visible.
+#let scale-inset(spec, k) = {
+  if k == 1 { return spec }
+  let scale-value(value) = if type(value) == ratio { value }
+    else if type(value) == relative { value.ratio + value.length * k }
+    else { value * k }
+  if type(spec) == dictionary {
+    spec.pairs().fold((:), (d, p) => d + ((p.at(0)): scale-value(p.at(1))))
+  } else {
+    scale-value(spec)
+  }
+}
+
 #let _resolve-style-length(value, fallback) = {
   if value == auto { return fallback }
   if type(value) == length { return value }
@@ -51,7 +65,7 @@
   if "radius" in out {
     if type(out.radius) == length {
       out.radius = out.radius * scale
-    } else {
+    } else if type(out.radius) == relative {
       out.radius = out.radius.ratio + out.radius.length * scale
     }
   }
@@ -73,12 +87,14 @@
 }
 
 #let _cross-mark-shape(label, pad, style) = {
-  let fallback = calc.max(calc.min(style.min-width, style.min-height), 6pt)
+  let reference = calc.min(style.min-width, style.min-height)
+  let fallback = if reference > 0pt { reference } else { 6pt }
   let size = _resolve-style-length(style.mark-size, fallback)
   if size <= 0pt { return (kind: "empty") }
   let thickness = _resolve-style-length(style.mark-thickness, size / 5)
+  if thickness <= 0pt { return (kind: "empty") }
   let half-size = size / 2
-  let half-thick = calc.max(thickness / 2, 0.4pt)
+  let half-thick = thickness / 2
   let raw = (
     (-half-thick, -half-size),
     (half-thick, -half-size),
@@ -108,7 +124,7 @@
   let spec = if source == auto { style.stroke } else { scale-stroke(source, scale) }
   let pen = if spec in (none, auto) { none } else { stroke(spec) }
   let paint = if fill != none { fill } else if pen == none or pen.paint == auto { black } else { pen.paint }
-  let thickness = if pen == none or pen.thickness == auto { 1pt } else { pen.thickness }
+  let thickness = if pen == none or pen.thickness == auto { 1pt * scale } else { pen.thickness }
   if fill == none and spec == none { none } else { (paint: paint, thickness: thickness) }
 }
 
@@ -195,9 +211,18 @@
   if extents == none {
     extents = (style.min-width / 2, style.min-height / 2)
   }
-  let fallback = calc.max(calc.min(extents.at(0), extents.at(1)) * 2, 6pt)
+  let reference = calc.min(extents.at(0), extents.at(1)) * 2
+  let requested-size = style.at("mark-size", default: auto)
+  // Percentages are relative to the actual base silhouette, even when it is
+  // smaller than the default glyph. Only a genuinely automatic mark keeps the
+  // established 6pt fallback (scaled with the diagram).
+  let fallback = if requested-size == auto {
+    calc.max(reference, 6pt * scale)
+  } else {
+    reference
+  }
   let size = _resolve-style-length(
-    _scaled-mark-length(style.at("mark-size", default: auto), scale),
+    _scaled-mark-length(requested-size, scale),
     fallback,
   )
   if size <= 0pt { return () }
@@ -205,6 +230,7 @@
     _scaled-mark-length(style.at("mark-thickness", default: auto), scale),
     ink.thickness,
   )
+  if thickness <= 0pt { return () }
   let part-style = expand-min-size(style + (
     shape: _cross-mark-shape,
     fill: ink.paint,
@@ -314,7 +340,10 @@
     assert(type(part-shape) == function, message: "shape part `shape` must be a shape builder function")
 
     let part-overrides = _scale-part-style(part + (shape: part-shape), scale)
-    let part-style = expand-min-size(style + part-overrides)
+    // Expand the part layer before merging it. The resolved base style already
+    // has explicit axes, and expanding afterward would make those inherited
+    // keys incorrectly defeat a part-local `min-size` shorthand.
+    let part-style = expand-min-size(style) + expand-min-size(part-overrides)
     let part-outline = build-outline(
       part-shape,
       measured,
@@ -506,8 +535,9 @@
 /// index: 0)`.
 ///
 /// Sized like every other node: in pt, from the label plus `inset`, floored
-/// at a minimum that grows with the leg counts so a many-legged gate has room
-/// to fan out. It therefore follows the diagram's `scale` zoom and ignores
+/// at a minimum that grows when an axis has multiple legs so a many-legged
+/// gate has room to fan out; a lone port adds no size floor. It therefore
+/// follows the diagram's `scale` zoom and ignores
 /// `scale-edges`, exactly as the spiders do. `size: (width, height)` (lengths)
 /// overrides that minimum; `inset:` is the label-to-edge padding.
 #let gate(
@@ -557,8 +587,8 @@
   )
 }
 
-/// Refers to one wire attachment point on a `gate()`, e.g. `zx.port(g,
-/// "left")`, `zx.port(g, "right", 1)` or `zx.port(g, "right", index: 1)`. Usable anywhere an edge
+/// Refers to one wire attachment point on a `gate()`, e.g. `typ.port(g,
+/// "left")`, `typ.port(g, "right", 1)` or `typ.port(g, "right", index: 1)`. Usable anywhere an edge
 /// endpoint is expected, and it carries `g` along, so the gate is drawn
 /// automatically just as `edge(g, ..)` would draw it.
 ///
@@ -906,19 +936,6 @@
 // `size-factor` is the diagram's zoom, applied to shape sizes and label text
 // alike. Everything here is in pt — no coordinate unit is involved, which is
 // what makes node sizes independent of `scale-edges`.
-// Multiplies every length in an `inset:` spec, whichever form it took.
-#let scale-inset(spec, k) = {
-  if k == 1 { return spec }
-  let scale-value(value) = if type(value) == ratio { value }
-    else if type(value) == relative { value.ratio + value.length * k }
-    else { value * k }
-  if type(spec) == dictionary {
-    spec.pairs().fold((:), (d, p) => d + ((p.at(0)): scale-value(p.at(1))))
-  } else {
-    scale-value(spec)
-  }
-}
-
 // Only fields that can affect node preparation. Coordinates, names and custom
 // metadata are placement concerns; excluding them lets Typst memoize identical
 // labels/styles across nodes at different positions.
@@ -978,8 +995,10 @@
   if resolved-port-spacing == auto { resolved-port-spacing = port-spacing }
   if resolved-port-spacing != auto { resolved-port-spacing *= k }
 
-  // A gate is a rectangle whose floor grows with its leg counts, so a
-  // many-legged gate has room to fan its wires out. That is the *only* thing
+  // A gate is a rectangle whose floor grows when an axis has multiple ports,
+  // so a many-legged gate has room to fan its wires out. A lone port needs no
+  // fan-out floor and therefore leaves compact marker sizes authoritative.
+  // That is the *only* thing
   // special about it, and expressing it as a floor rather than as its own
   // geometry means a gate obeys every knob the other kinds do — including a
   // different `shape:` if you want one.
@@ -987,17 +1006,19 @@
     let legs = n.legs
     let across = calc.max(legs.at("top", default: 0), legs.at("bottom", default: 0))
     let down = calc.max(legs.at("left", default: 0), legs.at("right", default: 0))
+    let spacing = if resolved-port-spacing == auto { 7pt * k } else { resolved-port-spacing }
+    let port-floor(count, margin) = if count > 1 {
+      (count - 1) * spacing + margin * k
+    } else {
+      0pt
+    }
     let (w0, h0) = if n.size != auto {
       (n.size.at(0) * k, n.size.at(1) * k)
     } else {
       (
-        calc.max(style.min-width, 7pt * across * k + 12pt * k),
-        calc.max(style.min-height, 7pt * down * k + 9pt * k),
+        calc.max(style.min-width, port-floor(across, 12pt)),
+        calc.max(style.min-height, port-floor(down, 9pt)),
       )
-    }
-    if resolved-port-spacing != auto {
-      if across > 1 { w0 = calc.max(w0, (across - 1) * resolved-port-spacing + 12pt * k) }
-      if down > 1 { h0 = calc.max(h0, (down - 1) * resolved-port-spacing + 9pt * k) }
     }
     style + (min-width: w0, min-height: h0)
   } else {

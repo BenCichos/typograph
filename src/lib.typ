@@ -6,7 +6,7 @@
 ///
 /// Typical usage (diagram coordinates are math-convention: x right, y up):
 /// ```typc
-/// #import "@preview/typograph:0.2.0" as typ
+/// #import "@preview/typograph:0.2.1" as typ
 ///
 /// #typ.diagram({
 ///   let a = typ.node(0, 0, label: [A], style: (shape: typ.shapes.circle, fill: aqua))

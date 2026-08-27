@@ -40,7 +40,7 @@ When given `"isosceles"`, the `ratio` argument (positive number) scales the
 horizontal width relative to the base equilateral geometry. `"angles"` uses
 exactly three angle values, all of type `angle`.
 
-## Composite shape styling: `shape.parts` and marks
+## Composite shape styling: `shape.parts` and marks {#composite-shape-styling}
 
 A style can layer multiple outlines in a single node through
 `shape.parts` (dictionary key).
@@ -53,6 +53,10 @@ A style can layer multiple outlines in a single node through
 - `transform` displaces a part by an absolute `(dx, dy)` length pair or by
   an `{x: .., y: ..}` dictionary, in the same coordinate frame as the
   fitted node bounds.
+- Part-local absolute minima, inset, radius length, stroke thickness, and
+  transform offsets scale with diagram/group zoom. Percentage radii remain
+  proportional, and a part-local `min-size` overrides inherited per-axis
+  minima.
 - `parts` is still accepted as a legacy alias, but `shape.parts` is the
   canonical name.
 
@@ -68,6 +72,11 @@ mark-specific keys:
 - `mark-thickness`
 - `mark-fill`
 - `mark-stroke`
+
+Absolute mark sizes, thicknesses, and strokes scale with the diagram. A cross
+`mark-size` percentage is relative to the resolved base silhouette, so
+`100%` continues to fit targets smaller than 6pt; the 6pt default is used only
+for an automatic cross that has no larger reference size.
 
 Example styles:
 

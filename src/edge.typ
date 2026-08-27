@@ -46,7 +46,7 @@
 /// A quadratic-Bézier segment to `end`, bulging towards `control`. The
 /// curve starts at the previous waypoint, ends at `end`, and is pulled
 /// toward — but does not pass through — `control`; at its midpoint it
-/// reaches halfway to `control`. See `docs/API.md` for a picture.
+/// reaches halfway to `control`. See `docs/quarto/edges.qmd` for a picture.
 #let quad(control, end) = {
   assert(is-coord(control), message: "quad() control must be a numeric (x, y) coordinate")
   (type: "path-el", kind: "quad", ctrl: (control,), end: end)
@@ -81,7 +81,7 @@
 /// `control-start` sets the direction/strength the curve *leaves* the
 /// previous waypoint, `control-end` the direction it *arrives* at `end`
 /// from. Think of each as a handle pulled out of its endpoint. See
-/// `docs/API.md` for a picture.
+/// `docs/quarto/edges.qmd` for a picture.
 #let cubic(control-start, control-end, end) = {
   assert(
     is-coord(control-start) and is-coord(control-end),

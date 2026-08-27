@@ -28,14 +28,17 @@ typ.gate(
 )
 ```
 Labelled, port-capable. `legs` values are non-negative integers; automatic
-minimum size grows with the largest count per axis; `size: (w, h)` overrides
-it. `max-legs-per-side` (when not `none`) rejects any side with too many
-ports. `port-spacing:` sets an exact positive distance between neighboring
+minimum size grows only when an axis has multiple ports, using their exact
+center spacing plus the gate margin: `(count - 1) * spacing + 12pt`
+horizontally and `(count - 1) * spacing + 9pt` vertically, with the lengths
+scaled by the diagram. A lone port leaves the styled minimum untouched.
+`size: (w, h)` overrides it. `max-legs-per-side` (when not `none`)
+rejects any side with too many ports. `port-spacing:` sets an exact positive distance between neighboring
 port centers; `auto` inherits the diagram/config value. `kind:` selects the
 theme preset independently of port capability.
 
 ```typ
-measurement(x, y, label: none, name: none, style: (:), legs: (right: 1), max-legs-per-side: 1)
+measurement(x, y, label: none, name: none, style: (:), legs: (right: 1), max-legs-per-side: 1, port-spacing: auto)
 
 state(x, y, label: none, name: none, style: (:), legs: (right: 1), port-spacing: auto)
 
@@ -57,6 +60,7 @@ target(
   x, y, label: none,
   name: none,
   style: (:),
+  size: auto,
   legs: (left: 1),
   max-legs-per-side: 1,
   flip: auto,
@@ -73,6 +77,7 @@ cnot(
   target-style: (:),
   wire-style: (:),
   control-size: auto,
+  target-size: auto,
   control-legs: (right: 1),
   target-legs: (left: 1),
   max-legs-per-side: 1,
@@ -115,6 +120,7 @@ unitary(
   style: (:),
   legs: (left: 1, right: 1),
   max-legs-per-side: none,
+  port-spacing: auto,
   size: auto,
   inset: auto,
 )
@@ -165,7 +171,11 @@ fock_state(x, y, label: [$n$], name: none, style: (:), legs: (right: 1))
 These are convenience constructors exported by
 `@preview/typograph-circuit:0.1.0`.
 `controlled_z` aliases `cz`; `fredkin` aliases `cswap`. Marker `size:` is a
-positive length or `auto`; the filled and open controls default to `5pt`.
+positive length or `auto`. `auto` leaves normal theme/diagram/instance
+`min-size` precedence intact; filled and open controls default to `5pt`, and
+the target defaults to `12pt`. An explicit size replaces that styled minimum;
+a label may still enlarge the fitted marker. `cnot` forwards its
+`control-size:` and `target-size:` values to the corresponding marker.
 
 ```typ
 typ.port(node, side, index: 0)

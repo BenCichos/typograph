@@ -27,14 +27,19 @@ direct arguments (the call-site style layer); anything else, including
 `min-size`, goes in `style:`.
 
 ```typ
-typ.gate(x, y, label, legs: (left: 1, right: 1), size: auto, inset: auto, name: none, style: (:), kind: "gate")
+typ.gate(x, y, label, legs: (left: 1, right: 1), max-legs-per-side: none, port-spacing: auto, size: auto, inset: auto, name: none, style: (:), kind: "gate")
 ```
 
 A labelled, port-capable node. `legs` holds non-negative integer counts for
-`left`, `right`, `top`, and `bottom`; the automatic minimum size grows with
-the largest leg count on each axis, or supply `size: (width, height)` to
-override it directly. `kind:` controls which theme preset applies — a gate
-with `kind: "measurement"` is independently themeable and still port-capable,
+`left`, `right`, `top`, and `bottom`; when an axis has multiple ports, its
+automatic minimum grows from the exact center spacing plus a gate margin:
+`(count - 1) * spacing + 12pt` horizontally and
+`(count - 1) * spacing + 9pt` vertically, with every length following the
+diagram scale. A lone port adds no size floor. `port-spacing: auto` inherits
+the diagram/config spacing, while `max-legs-per-side` optionally rejects an
+oversubscribed side. Supply `size: (width, height)` to override the automatic
+minimum directly. `kind:` controls which theme preset applies — a
+gate with `kind: "measurement"` is independently themeable and still port-capable,
 since port behavior travels as node capability metadata, not as the `"gate"`
 kind specifically. Its shape can be a circle, ellipse, rectangle, or polygon;
 port candidates are projected onto whichever outline is resolved.
@@ -118,9 +123,13 @@ Circuit constructors are still ordinary generic nodes under the hood:
 - `barrier(...)` draws a local dashed circuit barrier; `input_label(...)` and
   `output_label(...)` place endpoint labels without introducing special nodes.
 
-The filled `control(...)` and `control_dot(...)` markers default to `5pt`.
-Use `size: 9pt` for a direct per-instance override, or `style: (min-size: 9pt)`
-when composing style dictionaries.
+Filled controls, open controls, and `control_dot(...)` default to `5pt`; the
+target defaults to `12pt`. Their `size: auto` default preserves ordinary
+theme, diagram, and instance `min-size` precedence, including values below
+`5pt`. Use `size: 3pt` for a direct per-instance override, or
+`style: (min-size: 3pt)` when composing style dictionaries. An explicit
+`size` wins over the styled minimum. `cnot(...)` exposes the same choices as
+`control-size:` and `target-size:`.
 
 This focused vocabulary follows the recurring elements in the
 [Quill circuit package](https://github.com/Mc-Zen/quill),

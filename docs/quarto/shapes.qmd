@@ -132,6 +132,46 @@ call with a top-level `flip:` argument, on top of whatever the theme already
 set. Reach for `flippable: true` on any reusable kind whose shape is
 directional — see [`node-type()`](nodes.qmd#reusable-node-types-node-type).
 
+## Composite parts and marks
+
+One node can paint extra silhouettes without inventing a new shape builder.
+Put an array or dictionary of part specifications in the node style's
+`"shape.parts"` key:
+
+```typ
+typ.node(0, 0, style: (
+  shape: typ.shapes.circle,
+  min-size: 12pt,
+  fill: white,
+  "shape.parts": (
+    (shape: typ.shapes.circle, inset: 3pt, fill: none, stroke: 0.6pt + black),
+  ),
+  mark: "cross",
+  mark-size: 100%,
+  mark-stroke: 0.55pt + black,
+))
+```
+
+A part can be a builder function, or a style dictionary with an optional
+`shape`. `layer: "behind"` paints it before the base body and label;
+`layer: "front"` is the default. `transform:` accepts an absolute `(dx, dy)`
+length pair or an `(x: .., y: ..)` dictionary. The older `parts` key remains
+an alias, but `shape.parts` is the canonical spelling.
+
+Parts follow the same zoom rules as their parent. Absolute `min-size`, inset,
+radius, stroke thickness, and transform offsets scale with `diagram(scale:)`
+and `group(scale:)`; a percentage radius remains a percentage of the scaled
+part. Part-local `min-size` wins over inherited per-axis minima.
+
+`mark: "cross"` and `mark: "measurement"` are conveniences implemented as
+parts. Mark size, thickness, fill, and stroke are independently configurable.
+A percentage cross size is relative to the resolved base silhouette, so a
+`100%` target keeps fitting even below `5pt`; the automatic `6pt` fallback is
+used only when there is no larger reference size. Absolute marker geometry
+and stroke weights scale with the diagram. See
+[Composite shape styling](reference/shapes.qmd#composite-shape-styling)
+for the complete key contract.
+
 ## Custom shape builders
 
 A builder's conceptual signature is:

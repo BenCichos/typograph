@@ -23,10 +23,12 @@ merging anywhere in the renderer.
 
 typograph itself ships no bundled theme — it's a neutral engine, useful
 directly with per-call `style:` dictionaries, or with a theme you write. For
-a complete, ready-made theme built entirely on the API this chapter
+complete, ready-made themes built entirely on the API this chapter
 describes, see [`typograph-zx`](https://bencichos.github.io/typograph-zx/)
-(ZX-calculus notation) — it's also the best worked example of everything
-below, since it's a real theme, not a toy one.
+(ZX-calculus notation) and
+[`typograph-circuit`](https://bencichos.github.io/typograph-circuit/)
+(quantum-circuit and continuous-variable circuit notation). They are real
+theme packages rather than toy examples.
 
 ## Writing your own theme file
 
@@ -36,7 +38,7 @@ it needs — `theme`, `node-type`, `edge-type`, `shapes` — and exports a
 
 ```typ
 // my-theme.typ
-#import "@preview/typograph:0.2.0" as typ
+#import "@preview/typograph:0.2.1" as typ
 
 #let pentagon = typ.node-type("pentagon")
 
@@ -64,7 +66,7 @@ it needs — `theme`, `node-type`, `edge-type`, `shapes` — and exports a
 The document imports and binds that file once:
 
 ```typ
-#import "@preview/typograph:0.1.0" as typ
+#import "@preview/typograph:0.2.1" as typ
 #import "my-theme.typ": theme as my-theme, pentagon, link
 
 #let diagram = typ.diagram.with(theme: my-theme)

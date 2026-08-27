@@ -860,18 +860,18 @@
   item
 }
 
-/// Lays out and draws a ZX(-like) diagram. `body` is a code block that
+/// Lays out and draws a diagram. `body` is a code block that
 /// builds up a flat list of nodes/edges/content, e.g.:
 /// ```typc
-/// let diagram = zx.diagram.with(theme: zx.themes.classic)
-/// diagram({
-///   let a = zx.z(0, 0, label: $alpha$)
-///   let b = zx.x(1, 0)
-///   zx.edge(a, b)
+/// #import "@preview/typograph:0.2.1" as typ
+/// typ.diagram({
+///   let a = typ.box(0, 0, [A])
+///   let b = typ.box(1, 0, [B])
+///   typ.edge(a, b)
 /// })
 /// ```
-/// Inside the block you can drop the `zx.` prefix entirely with a scoped
-/// `import zx: *` (see `docs/API.md`).
+/// Inside the block you can drop the `typ.` prefix entirely with a scoped
+/// `import typ: *` (see `docs/quarto/concepts.qmd`).
 ///
 /// Diagram coordinates are math-convention: `x` increases rightward, `y`
 /// upward. `scale` sets the on-page length of one coordinate unit and zooms
@@ -887,7 +887,7 @@
 /// `auto` inherits the surrounding document's size.
 /// `node-styles`/`edge-styles` override the
 /// default look — see the style dictionaries in `style.typ` for the
-/// available keys, e.g. `node-styles: (z: (fill: blue))` or `edge-styles:
+/// available keys, e.g. `node-styles: (box: (fill: blue))` or `edge-styles:
 /// (highlight-width: 4pt)`.
 ///
 /// Vertical placement: the diagram's `y = anchor` line (by default `y = 0`,
@@ -1004,8 +1004,8 @@
       work.push(item)
     } else {
       panic(
-        "zx.diagram: unexpected item " + repr(item)
-          + " — did you forget to build it with z()/x()/edge()/etc.?",
+        "typograph.diagram: unexpected item " + repr(item)
+          + " — did you forget to build it with node()/edge()/place()/etc.?",
       )
     }
   }

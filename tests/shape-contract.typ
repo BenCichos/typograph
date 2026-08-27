@@ -204,6 +204,114 @@
 #assert(cross-state.kind == "parts")
 #assert(cross-state.parts.len() == 2)
 
+// Percentage-sized crosses follow the resolved base silhouette below 6pt,
+// and their filled band uses the scaled mark stroke without a device-space
+// minimum. These values describe a 4pt target-like node at half scale.
+#let scaled-cross-node = typ.node(0, 0, style: (
+  shape: typ.shapes.circle,
+  min-size: 4pt,
+  inset: 0pt,
+  stroke: none,
+  mark: "cross",
+  mark-stroke: 0.6pt + black,
+  mark-size: 100%,
+  mark-thickness: auto,
+  mark-angle: 0deg,
+)).first()
+#let scaled-cross = node-outline(scaled-cross-node, size-factor: 0.5).outline
+#let scaled-cross-part = scaled-cross.parts.first().outline
+#let full-cross-part = node-outline(
+  scaled-cross-node,
+  size-factor: 1,
+).outline.parts.first().outline
+#assert(approx-length(scaled-cross.base.outline.radius, 1pt))
+#assert(approx-length(scaled-cross-part.half-width, 1pt))
+#assert(approx-length(calc.abs(scaled-cross-part.points.first().at(0)), 0.15pt))
+#assert(approx-length(full-cross-part.half-width, 2pt))
+#assert(approx-length(calc.abs(full-cross-part.points.first().at(0)), 0.3pt))
+
+#let auto-cross-node = typ.node(0, 0, style: (
+  shape: typ.shapes.circle,
+  min-size: 4pt,
+  inset: 0pt,
+  stroke: none,
+  mark: "cross",
+  mark-stroke: 0.6pt + black,
+  mark-size: auto,
+  mark-angle: 0deg,
+)).first()
+#let half-auto-cross = node-outline(
+  auto-cross-node,
+  size-factor: 0.5,
+).outline.parts.first().outline
+#let full-auto-cross = node-outline(
+  auto-cross-node,
+  size-factor: 1,
+).outline.parts.first().outline
+#assert(approx-length(half-auto-cross.half-width, 1.5pt))
+#assert(approx-length(full-auto-cross.half-width, 3pt))
+
+// A fill-only cross has no pen to supply Typst's default 1pt thickness, so
+// that fallback must explicitly follow the diagram scale too.
+#let fill-only-cross = typ.node(0, 0, style: (
+  shape: typ.shapes.circle,
+  min-size: 4pt,
+  inset: 0pt,
+  stroke: none,
+  mark: "cross",
+  mark-fill: red,
+  mark-stroke: none,
+  mark-size: 100%,
+  mark-thickness: auto,
+  mark-angle: 0deg,
+)).first()
+#let fill-only-part = node-outline(
+  fill-only-cross,
+  size-factor: 0.5,
+).outline.parts.first().outline
+#assert(approx-length(calc.abs(fill-only-part.points.first().at(0)), 0.25pt))
+
+// Part-local lengths scale like the base style, while a percentage radius is
+// dimensionless and must not be treated as a relative-length record.
+#let scaled-part-radius(radius, factor) = {
+  let n = typ.node(0, 0, style: (
+    shape: typ.shapes.circle,
+    min-size: 8pt,
+    inset: 0pt,
+    "shape.parts": ((
+      shape: typ.shapes.rect,
+      min-size: 8pt,
+      inset: 0pt,
+      radius: radius,
+      fill: none,
+      stroke: none,
+    ),),
+  )).first()
+  node-outline(n, size-factor: factor).outline.parts.first().outline.radius
+}
+#assert(approx-length(scaled-part-radius(50%, 0.5), 1pt))
+#assert(approx-length(scaled-part-radius(1pt, 0.5), 0.5pt))
+#assert(approx-length(scaled-part-radius(50% + 1pt, 0.5), 1.5pt))
+
+#let part-floor-node = typ.node(0, 0, style: (
+  shape: typ.shapes.circle,
+  min-size: 20pt,
+  inset: 0pt,
+  "shape.parts": ((
+    shape: typ.shapes.rect,
+    min-size: 6pt,
+    inset: 0pt,
+    fill: none,
+    stroke: none,
+  ),),
+)).first()
+#let scaled-part-floor = node-outline(
+  part-floor-node,
+  size-factor: 0.5,
+).outline.parts.first().outline
+#assert(approx-length(scaled-part-floor.half-width * 2, 3pt))
+#assert(approx-length(scaled-part-floor.half-height * 2, 3pt))
+
 #let measurement-mark = shape-outline(
   style(
     typ.shapes.rect,
@@ -221,6 +329,29 @@
 #let measurement-bounds = outline-size(measurement-mark, measured)
 #assert(measurement-bounds.left < 0pt and measurement-bounds.right > 0pt)
 #assert(measurement-bounds.top < -measurement-mark.base.outline.half-height)
+
+// Port capability alone must not enlarge a compact one-port marker. Multiple
+// ports do grow the corresponding axis from their exact center spacing plus
+// the established gate margin.
+#let compact-gate = typ.gate(
+  0, 0, none,
+  legs: (right: 1),
+  style: (shape: typ.shapes.circle, min-size: 3pt, inset: 0pt),
+).first()
+#assert(approx-length(node-outline(compact-gate).outline.radius, 1.5pt))
+
+#let multi-port-height(spacing) = {
+  let n = typ.gate(
+    0, 0, none,
+    legs: (right: 3),
+    port-spacing: spacing,
+    style: (shape: typ.shapes.rect, min-size: 0pt, inset: 0pt),
+  ).first()
+  node-outline(n).outline.half-height * 2
+}
+#assert(approx-length(multi-port-height(3pt), 15pt))
+#assert(approx-length(multi-port-height(7pt), 23pt))
+#assert(approx-length(multi-port-height(10pt), 29pt))
 
 // shape-labelled is also a builder, so users can opt into a different form
 // without coupling a node kind to either geometry.

@@ -5,7 +5,7 @@ reusable fragments — with Typst's native graphics. No CeTZ, no LaTeX/TikZ
 dependency. It has no opinion about what a node should look like; a
 document supplies that itself, or through a theme.
 
-## Two packages, on purpose
+## Engine and visual languages, separated on purpose
 
 Most diagramming libraries fuse a drawing engine and a visual language into
 one thing. This project keeps them separate:
@@ -18,11 +18,14 @@ one thing. This project keeps them separate:
   on typograph's public API: ZX-calculus and continuous-variable ZX-calculus
   notation — spiders, Hadamards, multipliers, Pauli-web highlighting — as a
   complete, ready-to-use theme.
+- **[`typograph-circuit`](https://bencichos.github.io/typograph-circuit/)**
+  supplies quantum-circuit and continuous-variable circuit notation, also
+  entirely through the public theme and constructor APIs.
 
-Nothing from either package is applied unless a document asks for it:
+Nothing from a companion package is applied unless a document asks for it:
 
 ```typ
-#import "@preview/typograph:0.2.0" as typ
+#import "@preview/typograph:0.2.1" as typ
 #import "@preview/typograph-zx:0.1.0" as zx
 #let diagram = typ.diagram.with(theme: zx.theme)
 ```
@@ -44,7 +47,7 @@ and what it costs.
 From a Typst package installation:
 
 ```typ
-#import "@preview/typograph:0.1.0" as typ
+#import "@preview/typograph:0.2.1" as typ
 ```
 
 Or, working inside this repository, import the source directly:
@@ -59,7 +62,7 @@ you want one (see [Theming](theming.qmd)). To draw ZX-calculus diagrams
 specifically, add [`typograph-zx`](https://bencichos.github.io/typograph-zx/) and bind its theme:
 
 ```typ
-#import "@preview/typograph:0.1.0" as typ
+#import "@preview/typograph:0.2.1" as typ
 #import "@preview/typograph-zx:0.1.0" as zx
 #let diagram = typ.diagram.with(theme: zx.theme)
 ```
@@ -101,5 +104,7 @@ has nothing to contribute it, so it must be emitted as a bare statement:
   from an empty palette to a restyled gate.
 - [ZX Theme](https://bencichos.github.io/typograph-zx/) covers `typograph-zx`: its constructors, its
   bundled appearance, and how to extend it.
+- [Circuit Theme](https://bencichos.github.io/typograph-circuit/) covers the
+  focused quantum-circuit and continuous-variable gate vocabulary.
 - The [Reference](reference/diagram.qmd) section is the exhaustive,
   lookup-first version of everything the guide introduces narratively.

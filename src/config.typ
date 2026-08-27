@@ -1,11 +1,11 @@
 // Scope-wide defaults for `diagram()`.
 //
 // `#set` is reserved by the language for *element* functions, so
-// `#set zx.diagram(..)` is a hard compile error and no package can change
+// `#set typ.diagram(..)` is a hard compile error and no package can change
 // that. Three mechanisms cover the same ground — see "Setting defaults" in
-// `docs/API.md`:
+// `docs/quarto/configuration.qmd`:
 //
-//   1. `zx.diagram.with(..)` — Typst's own partial application. The idiomatic
+//   1. `typ.diagram.with(..)` — Typst's own partial application. The idiomatic
 //      choice, free at runtime, and `let`-shadowing gives scoped defaults.
 //   2. `#set text(..)` — already works: labels are set in `1em` and inherit
 //      the surrounding text style.
@@ -19,7 +19,7 @@
 // `config()` reverts cleanly when it ends. The state is read during the
 // diagram's existing contextual layout work; it does not add another pass.
 
-#let defaults-state = state("@local/cvzx:0.2.0/config-defaults", ((:),))
+#let defaults-state = state("@preview/typograph:0.2.1/config-defaults", ((:),))
 
 #let config-keys = (
   "scale", "scale-edges", "font-size", "grid", "inset", "anchor",
@@ -37,13 +37,13 @@
 /// not override them itself:
 ///
 /// ```typc
-/// #show: zx.config.with(font-size: 9pt, scale: 0.8cm)   // whole document
+/// #show: typ.config.with(font-size: 9pt, scale: 0.8cm)   // whole document
 /// ```
 ///
 /// or, for one section only:
 ///
 /// ```typc
-/// #zx.config(font-size: 7pt)[
+/// #typ.config(font-size: 7pt)[
 ///   ... diagrams here are small ...
 /// ]
 /// ```

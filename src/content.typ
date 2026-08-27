@@ -1,7 +1,8 @@
 #import "utility.typ": is-node, is-edge, is-content, is-coord, split-direction
 
 /// Places arbitrary content at diagram coordinates `(x, y)` — e.g. a label,
-/// a "⋯" leg-count marker, or a caption. Re-exported as `zx.place`.
+/// a "⋯" leg-count marker, or a caption. Exported as `typ.place` by the
+/// package facade.
 #let place-item(x, y, body, align: center + horizon) = {
   assert(type(x) in (int, float) and type(y) in (int, float), message: "place coordinates must be numbers")
   assert(type(align) == alignment, message: "place align must be an alignment")
@@ -24,15 +25,15 @@
 /// composes with itself:
 ///
 /// ```typc
-/// let cnot = {                      // define once...
-///   let c = zx.z(0, 0)
-///   let t = zx.x(0, 1)
-///   zx.edge(c, t)
+/// #import "@preview/typograph:0.2.1" as typ
+/// let motif = {                     // define once...
+///   let a = typ.box(0, 0, [A])
+///   let b = typ.box(0, 1, [B])
+///   typ.edge(a, b)
 /// }
-/// let diagram = zx.diagram.with(theme: zx.themes.classic)
-/// diagram({
-///   zx.group(cnot)                          // ...place as-is
-///   zx.group(dx: 2, scale: 0.6, cnot)       // ...or moved and shrunk
+/// typ.diagram({
+///   typ.group(motif)                        // ...place as-is
+///   typ.group(dx: 2, scale: 0.6, motif)     // ...or moved and shrunk
 /// })
 /// ```
 ///

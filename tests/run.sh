@@ -15,7 +15,7 @@ trap 'rm -rf "$TEST_TMP"' EXIT
 # through the manifest/package loader at the exact path this package will
 # ship under once published, to catch entrypoint/facade regressions.
 if ! mkdir -p "$TEST_TMP/packages/preview/typograph" \
-  || ! ln -s "$PWD" "$TEST_TMP/packages/preview/typograph/0.2.0"; then
+  || ! ln -s "$PWD" "$TEST_TMP/packages/preview/typograph/0.2.1"; then
   echo "could not stage local package fixture" >&2
   exit 1
 fi
