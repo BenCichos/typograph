@@ -4,12 +4,48 @@
 // points goes through this, so the y-flip only has to be correct once.
 #let to-screen(p, unit) = (p.at(0) * unit, -p.at(1) * unit)
 
+// Absolute inputs remain usable without context. An em component is resolved
+// only at layout time, against the surrounding text size (before node zoom).
+#let absolute-length(value) = {
+  if type(value) == length {
+    if value.em == 0 { value } else { value.to-absolute() }
+  }
+  else if type(value) == relative { value.ratio + absolute-length(value.length) }
+  else { value }
+}
+
+#let absolute-inset(spec) = if type(spec) == dictionary {
+  spec.pairs().fold((:), (out, pair) => out + ((pair.at(0)): absolute-length(pair.at(1))))
+} else { absolute-length(spec) }
+
+// Scale physical/diagram dimensions, not percentages of another dimension.
+// Shared by insets, corner radii, and decorative shape/mark overrides.
+#let scale-length(value, factor) = {
+  if type(value) == relative { value.ratio + value.length * factor }
+  else if type(value) in (int, float, length) { value * factor }
+  else { value }
+}
+
+// Constructor-time validation cannot compare mixed-sign pt/em components
+// without a text context. Defer only those ambiguous signs; layout validates
+// the resolved absolute value again. Certainly negative lengths still fail
+// immediately, including negative pure-em lengths.
+#let is-size-length(value, positive: false) = {
+  if type(value) != length { return false }
+  if value.em == 0 {
+    return if positive { value.abs > 0pt } else { value.abs >= 0pt }
+  }
+  if value.abs == 0pt { return value.em > 0 }
+  if (value.abs > 0pt) != (value.em > 0) { return true }
+  value.abs > 0pt
+}
+
 /// Resolves an `inset:` argument to `(left, right, top, bottom)` absolute
 /// lengths, following Typst's own inset convention: a single value applies
 /// to every side, or pass a dictionary with any of `left`/`right`/`top`/
 /// `bottom`/`x`/`y`/`rest` (more specific keys win). A plain number means
 /// diagram units — so it scales with the diagram — while a length (`4pt`,
-/// `1mm`) is taken as-is.
+/// `1mm`) is taken as-is. Font-relative components resolve in layout context.
 #let inset-keys = ("left", "right", "top", "bottom", "x", "y", "rest")
 
 // Validates the two inset dialects used by the package. Diagram/node insets
@@ -51,7 +87,7 @@
 
 #let resolve-inset(spec, unit, source: "inset") = {
   let _ = validate-inset(spec, source: source)
-  let to-length(v) = if type(v) == length { v } else { v * unit }
+  let to-length(v) = if type(v) == length { absolute-length(v) } else { v * unit }
   if type(spec) != dictionary {
     let v = to-length(spec)
     return (left: v, right: v, top: v, bottom: v)
@@ -130,7 +166,8 @@
 // ---------------------------------------------------------------------
 
 // Strips the unit from a length so plain `calc` functions (sqrt, etc.)
-// can operate on it; the inverse of `* 1pt`.
+// can operate on it; the inverse of `* 1pt`. Layout normalizes em before
+// entering these hot geometry helpers.
 #let num(l) = l / 1pt
 
 // Axis-aligned rectangle, half-extents (hw, hh), centered at the origin.

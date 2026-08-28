@@ -4,20 +4,31 @@
 bash tests/run.sh
 ```
 
-runs everything: unit, API, package, configuration, and smoke tests; straight/
-shape/curve stress fixtures; a checked outline-geometry snapshot;
-documentation-source compilation; a generated-SVG staleness check; and every
-expected-failure (negative) test. It stages a throwaway local package first:
+runs the required test suite: unit, API, package, configuration, geometry,
+transform, layout, documentation-example, and smoke tests; straight/shape/
+curve stress fixtures; Python test-helper contracts; a checked outline-geometry
+snapshot; documentation-figure compilation; a generated-SVG staleness check;
+and every expected-failure (negative) test. Regression tests for the August
+2026 review findings are ordinary required passing tests. Runtime and memory
+comparisons are separate: see [Performance Model](performance.qmd).
+
+Use Typst **0.15.1**, matching `typst.toml` and CI, plus Python 3 for the SVG
+checks. Quarto is needed only to build the documentation site. Run from any
+working directory; the script changes to the repository root, writes outputs
+to a fresh temporary directory, and removes that directory on exit. It stages
+a throwaway local package first:
 
 ```bash
 mkdir -p "$TEST_TMP/packages/preview/typograph"
-ln -s "$PWD" "$TEST_TMP/packages/preview/typograph/0.2.1"
+ln -s "$PWD" "$TEST_TMP/packages/preview/typograph/0.3.0"
 export TYPST_PACKAGE_PATH="$TEST_TMP/packages"
 ```
 
-a symlink into the checkout itself, so every test compiles against
-`@preview/typograph:0.2.1` exactly as an end user would `#import` it, without
-actually publishing anything. This site's own figure sources
+a symlink into the checkout itself. `package-contract.typ` and
+`negative/lib-private-alias.typ` exercise `@preview/typograph:0.3.0` through
+the package loader without publishing or downloading the package. Most other
+tests import `/src/...` directly so they can also inspect internal helpers.
+This site's own figure sources
 (`docs/img/*.typ`) instead import `../../src/lib.typ` directly, since they're
 compiled with `--root .` from inside the checkout rather than through the
 staged package — both paths exercise the same code, just through the two
@@ -28,13 +39,39 @@ different ways a document can reach it (see
 
 `tests/unit.typ`, `api-contract.typ`, `theme-contract.typ`,
 `shape-contract.typ`, `config-contract.typ`, `package-contract.typ`,
-`smoke.typ`, `highlight-waypoints.typ`, `user.typ`, and the three stress fixtures all
+`geometry-properties.typ`, `transform-contract.typ`, `layout-contract.typ`,
+`position-contract.typ`, `position-transform-contract.typ`, `review-contract.typ`,
+`documentation-contract.typ`, `smoke.typ`, `highlight-waypoints.typ`,
+`user.typ`, the three stress fixtures, and `tests/regressions/*.typ` all
 have to compile cleanly. A contract test is, in effect, "every documented
 usage pattern for this area actually runs" — when a page in this site
 shows a code snippet that isn't already backed by a rendered figure (and
 therefore isn't compiled by the staleness check below), the corresponding
 contract test file is where it's worth confirming the snippet still compiles
 against current source, especially before publishing a documentation change.
+
+The top-level positive-file list is explicit in `run.sh`; add new suites
+there. Files under `tests/regressions/` are discovered automatically.
+The newer suites add stronger checks than successful compilation alone:
+
+| Suite | What it asserts |
+|---|---|
+| `geometry-properties.typ` | De Casteljau split/trim identities, path reversal and metric reuse, winding/rotation invariants, boundary equations, all port sides and indices. |
+| `transform-contract.typ` | Affine transforms before/after path construction, nonzero pivots, nested transforms, captured nodes, deferred controls/refs/ports, immutability, and unchanged placed content. |
+| `layout-contract.typ` | Exact measured dimensions with `baseline: 0pt`, zoom versus coordinate stretch, all nine content alignments, label sizing, gate floors, composite bounds, and style precedence. |
+| `position-contract.typ` | Point overloads, port/axis alignment, offsets, capture and identity, forward refs, independent axis dependencies, named/unnamed chains, and fan-out. |
+| `position-transform-contract.typ` | Deferred positions under pivots/nested rotations, upright non-square gates, global references, style/font/spacing changes, and measured agreement with numeric layouts. |
+| `review-contract.typ` | Forward/reverse clipping equivalence, stationary segments and concave outlines, shared simple/composite bounds, mixed length scaling, and identity-bucket collisions. |
+| `documentation-contract.typ` | Executable examples from constructor docstrings and selected guide/reference sections. |
+| `config-contract.typ` | Nested stack restoration, per-kind style merges, and actual renderer inheritance/overrides. |
+| `regressions/*.typ` | Contextual `em` geometry and scaling, config `auto` inheritance, square-cap and highlighted-join bounds, zero-size polygon fallbacks, circle-label containment, and long offset composition. |
+| `test_compare_svg.py` | The SVG helper's rounding, change detection, Unicode, and CLI exit statuses. |
+| `test_benchmark.py` | Benchmark process success, failure diagnostics, and timeout cleanup. |
+
+Property grids are deterministic and bounded; they are not exhaustive fuzzing.
+Quarto code listings are not automatically executed: signatures, partial
+examples, and companion-package snippets remain outside this suite unless
+copied into an executable contract fixture.
 
 ## Negative tests: must fail, for the *right* reason
 
@@ -56,6 +93,29 @@ A negative test passing because Typst happened to reject the file for some
 all — it would look green while testing nothing. Adding a new validation
 error anywhere in the package should come with a new file here and a new
 case in this function, not just a new `assert()`.
+
+## Regression tests: fixed bugs stay fixed
+
+The nine valid-input reproductions from the August 2026 review were promoted
+to `tests/regressions/` after their six underlying bugs were fixed. They now
+include bounded parameter grids and assertions beyond the original minimal
+examples. There is no expected-failure exemption for these files. See
+[Review Fixes](known-issues.qmd) for the behavior changes.
+
+The later simplification review added `offset-composition.typ`: 240 successive
+offsets on coordinate pairs, named references, nodes, and ports, including
+rotated groups. It compiles through the runner's staged public package import.
+
+To run one independently:
+
+```bash
+typst compile --root . tests/regressions/highlight-bounds.typ /tmp/typograph-highlight-bounds.pdf
+```
+
+That command must exit successfully. Negative fixtures additionally verify
+that mixed `em`/point dimensions which resolve to a negative value still fail
+with the intended validation message. Do not move a valid-input failure into
+`tests/negative/` simply to make the suite green.
 
 ## The outline-geometry snapshot
 
@@ -101,12 +161,17 @@ its own, in two separate ways this project has actually hit:
 - **Build/architecture jitter.** Even with fonts pinned, a different Typst
   *build* of the same version — official Linux release binary vs. a
   locally built one, x86_64 vs. arm64, a different linked libm — is not
-  guaranteed to produce bit-identical glyph or curve coordinates. `tests/
-  compare-svg.py` (used in place of a raw `cmp`) rounds every decimal
-  number in both files to 2 decimal places before comparing, which absorbs
-  that sub-percent jitter while still catching any real content change —
-  a moved node or a different colour shifts coordinates by far more than
-  0.01 units.
+  guaranteed to produce bit-identical glyph or curve coordinates.
+  `tests/compare-svg.py` (used in place of a raw `cmp`) rounds decimal
+  substrings in both files to 2 decimal places before comparing. This absorbs
+  many small differences while still detecting larger geometry, paint, and
+  structure changes.
+
+The SVG comparison is quantization, not a strict 0.01-unit difference test:
+two very close values on opposite rounding boundaries can still differ. It
+is also a text-based check, not an XML-aware image comparison; decimal text
+outside geometry is rounded too. Review changed figures visually, especially
+after changes to text, numeric formatting, opacity, or small geometry.
 
 Both defenses were added after this exact check passed locally and failed
 in CI, from a figure that had rendered correctly on the machine that wrote

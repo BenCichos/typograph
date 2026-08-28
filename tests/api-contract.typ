@@ -57,6 +57,7 @@
 #assert(typ.box(0, 0, fill: red, style: (fill: blue)).first().style.fill == red)
 #assert(typ.gate(0, 0, [U], inset: 2pt, style: (inset: 9pt)).first().style.inset == 2pt)
 #assert(typ.gate(0, 0, [U], port-spacing: 9pt).first().port-spacing == 9pt)
+#assert(typ.gate(0, 0, none, size: 2pt).first().size == (2pt, 2pt))
 #assert(side-port-offset(3, 20pt, 0, spacing: 7pt) == -7pt)
 #assert(side-port-offset(3, 20pt, 1, spacing: 7pt) == 0pt)
 #assert(side-port-offset(3, 20pt, 2, spacing: 7pt) == 7pt)

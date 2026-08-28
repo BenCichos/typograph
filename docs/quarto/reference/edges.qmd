@@ -16,7 +16,8 @@ typ.edge(
 ```
 
 At least two waypoints. A waypoint may be a node value, a `typ.port(..)`, an
-absolute numeric `(x, y)`, a `typ.ref(name)`, a `typ.rel(dx, dy)` (not in first
+coordinate pair `(x, y)`, a `typ.offset(point, dx, dy)`, a `typ.ref(name)`,
+a `typ.rel(dx, dy)` (not in first
 position), a `typ.smooth(waypoint)` (interior only), or a `typ.line`/`typ.quad`/
 `typ.cubic` path element. More than two waypoints form one continuous path.
 A multi-item fragment isn't a valid endpoint — pass its constructor result
@@ -26,6 +27,12 @@ directly, or its nodes as separate waypoints.
 |---|---|
 | `typ.rel(dx, dy)` | Offset from the preceding *resolved* waypoint. |
 | `typ.ref(name)` | Looks up a node emitted elsewhere by name; doesn't emit it. `name` must be a string. |
+| `typ.offset(point, dx, dy)` | Offset from an explicit point, in numeric diagram units; also usable for node/content placement. |
+
+Coordinate pairs may contain deferred `.x`/`.y` projections. Explicit
+offset/projected points do not clip to their source nodes; normal node and
+`ref` endpoints retain automatic clipping. Bézier control points still
+require numeric coordinates.
 
 ## Curve controls
 
@@ -59,7 +66,7 @@ typ.edge-defaults  // ==
 (
   stroke: stroke(paint: black, thickness: 0.55pt, cap: "butt", join: "miter"),
   highlight: none,
-  highlight-width: 3pt,
+  highlight-width: 4pt,
   highlight-offset: 0pt,
   highlight-opacity: 100%,
   label-size: auto,
@@ -85,6 +92,16 @@ Edge style dictionaries are **closed**: an unknown key is always an error.
 Direct arguments' `auto` (`stroke:`, and by convention `highlight:`/`clip:`
 too) means "don't override the resolved style" — `auto` is not itself a
 valid value for `highlight`/`clip` *inside* a `style:` dictionary.
+
+Stroke thickness and the geometric label/highlight lengths support `em`,
+resolved against surrounding text before edge zoom; see
+[Font-relative lengths](diagram.qmd#font-relative-lengths).
+
+Diagram bounds conservatively include square caps on diagonal wires, plus
+both the displaced centerlines and mitered strokes of highlight bands.
+Curved highlights are sampled polylines and need this join allowance even
+for a single Bézier segment. Multi-segment/curved highlighted edges can
+therefore reserve extra whitespace; the bounds are not an exact ink crop.
 
 ## Precedence
 

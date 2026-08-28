@@ -1,0 +1,4 @@
+// Reject this input at the intended validation boundary.
+#import "/src/lib.typ" as typ
+#let bad(label, pad, style) = (kind: "circle")
+#typ.diagram(typ.node(0, 0, style: (shape: bad)))

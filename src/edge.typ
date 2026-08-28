@@ -1,6 +1,7 @@
 #import "utility.typ": unwrap-node, is-coord, split-direction, vadd, vsub, vscale, vlen, vmid, vperp, vunit
 #import "geometry.typ": dir-vector
 #import "style.typ": validate-edge-style
+#import "position.typ": with-coordinates, position-pair, point-data, point-value
 
 // Default strength of an automatic bend handle, in diagram units.
 #let handle-length = 0.5
@@ -72,9 +73,10 @@
 /// variable first: `z(1, 0, name: "a")` … `edge(ref("a"), (2, 0))`. The node
 /// itself must still be emitted (write it as a bare statement) — a reference
 /// only points at it, so unlike `edge(a, ..)` it cannot draw it for you.
+/// Also usable as a node/content position, with .x/.y for individual axes.
 #let ref(name) = {
   assert(type(name) == str, message: "ref() name must be a string")
-  (type: "ref", name: name)
+  with-coordinates((type: "ref", name: name))
 }
 
 /// A cubic-Bézier segment to `end`, with two absolute control points:
@@ -104,7 +106,7 @@
     // The coordinate depends on the gate's rendered size, so it is worked
     // out during layout. `clip-to: none` because a port already lies *on*
     // the outline — pulling the wire back would swallow half the box.
-    return (end: none, defer: item, node: item.node, clip-to: none)
+    return (end: none, defer: item, node: unwrap-node(item.node), clip-to: none)
   }
   if tag == "ref" {
     // Resolved against the diagram's name index during layout.
@@ -115,7 +117,17 @@
     return (end: none, defer: item, node: none, clip-to: none)
   }
   let n = unwrap-node(item)
-  if n != none { return (end: (n.x, n.y), defer: none, node: n, clip-to: n) }
+  if n != none {
+    let pair = (n.x, n.y)
+    return (
+      end: if is-coord(pair) { pair } else { none },
+      defer: if is-coord(pair) { none } else { point-value(point-data(n)) },
+      node: n, clip-to: n,
+    )
+  }
+  if tag == "position" or (position-pair(item) and not is-coord(item)) {
+    return (end: none, defer: point-value(point-data(item)), node: none, clip-to: none)
+  }
   (end: item, defer: none, node: none, clip-to: none)
 }
 
@@ -279,7 +291,7 @@
   let deferred-kind = none
   for waypoint in waypoints {
     if waypoint.defer != none {
-      if waypoint.defer.type in ("port", "ref") {
+      if waypoint.defer.type in ("port", "ref", "position") {
         deferred-kind = "lookup"
       } else if deferred-kind == none {
         deferred-kind = "relative"

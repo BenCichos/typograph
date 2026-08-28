@@ -61,6 +61,13 @@ own body, then reverts cleanly once that body ends, and a diagram's own
 explicit argument always wins over any configured default, at any nesting
 depth.
 
+Omit a key or pass `auto` when a nested `config()` should preserve its
+parent's value. There are two exceptions: `font-size: auto` restores the
+surrounding document's text size, and `baseline: auto` restores the calculated
+math-axis baseline. To reset another key to its package default, supply that
+concrete value, for example `scale: 1`, `grid: false`, or `port-spacing: 7pt`.
+`node-styles: auto` and `edge-styles: auto` leave inherited styles unchanged.
+
 ```typ
 #typ.config(font-size: 8pt, scale: 0.6cm)[
   Small throughout this scope:
@@ -84,6 +91,11 @@ level by kind, `edge-styles` merges shallowly — and a diagram's own
 same "later wins, per key" rule as everywhere else in the style system (see
 [Core Concepts](concepts.qmd#style-resolution-the-same-idea-twice)).
 
+The merge does not recurse into individual style values: replacing `inset`
+replaces its whole side dictionary, and replacing `"shape.parts"` replaces
+the entire part collection. Within each layer `min-size` expands to both
+axes before merging, so a later `min-size` beats an earlier `min-width`.
+
 `theme` is deliberately not a `config()` option, for the same reason it
 isn't a plain default anywhere else: appearance is always bound explicitly
 with `diagram.with(theme: ..)`, never inherited implicitly from an enclosing
@@ -94,3 +106,12 @@ Implementation note, for anyone curious why this needed `state` at all when
 scopes revert correctly, read during the diagram's own contextual layout
 pass — it doesn't add a separate pass of its own. See
 [Performance Model](dev/performance.qmd) for the renderer's actual passes.
+
+### Measuring contextual diagrams
+
+With Typst 0.15.1, measuring the same contextual diagram value that is also
+rendered elsewhere can observe the rendered occurrence's configuration
+scope. For reliable size calculations, pass the relevant options explicitly
+to the diagram being measured, or measure a fragment that is not also laid
+out in another scope. This behavior also occurs with numeric-only diagrams;
+it is not specific to relative positioning.

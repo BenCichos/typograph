@@ -20,6 +20,13 @@ separate edge per pair.
 
 ## Deferred endpoints
 
+The same explicit points used for
+[relative node placement](nodes.qmd#relative-positioning) also work as
+waypoints: `edge(p, offset(p, 1, 0))` or `edge((p.x, -1), b)`.
+Offsets and projected coordinates are exact points: they do not request
+clipping against their source node. Passing a node or an unmodified `ref`
+still clips to that node normally.
+
 ```typ
 typ.rel(dx, dy)
 ```

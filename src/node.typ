@@ -1,24 +1,24 @@
 #import "utility.typ": unwrap-node, tight-text
+#import "position.typ": position-args, with-coordinates
 #import "style.typ": (
   resolve-node-style, expand-min-size, scale-stroke, box-base-style, gate-base-style,
+  absolute-node-style,
 )
 #import "shape.typ": build-outline
 #import "geometry.typ": (
   num, resolve-inset, rounded-rect-radius, ellipse-radius,
   polygon-radius, rotate-point, orient-points,
+  absolute-length, is-size-length, scale-length,
 )
 
 // Multiplies every length in an `inset:` spec, whichever form it took. This
 // lives before the part scaler because Typst bindings are not forward-visible.
 #let scale-inset(spec, k) = {
   if k == 1 { return spec }
-  let scale-value(value) = if type(value) == ratio { value }
-    else if type(value) == relative { value.ratio + value.length * k }
-    else { value * k }
   if type(spec) == dictionary {
-    spec.pairs().fold((:), (d, p) => d + ((p.at(0)): scale-value(p.at(1))))
+    spec.pairs().fold((:), (d, p) => d + ((p.at(0)): scale-length(p.at(1), k)))
   } else {
-    scale-value(spec)
+    scale-length(spec, k)
   }
 }
 
@@ -40,7 +40,7 @@
       value.len() == 2 and value.all(component => type(component) == length),
       message: "shape part transform must be a (dx, dy) length pair",
     )
-    return (value.at(0) * scale, value.at(1) * scale)
+    return (absolute-length(value.at(0)) * scale, absolute-length(value.at(1)) * scale)
   }
   assert(type(value) == dictionary, message: "shape part transform must be a (dx, dy) pair or a {x:.., y:..} dictionary")
   let dx = value.at("x", default: value.at("dx", default: 0pt))
@@ -48,41 +48,18 @@
   assert(type(dx) == length and type(dy) == length,
     message: "shape part transform requires x/dx and y/dy values to be lengths",
   )
-  (dx * scale, dy * scale)
+  (absolute-length(dx) * scale, absolute-length(dy) * scale)
 }
 
 #let _scale-part-style(overrides, scale) = {
-  let out = overrides
+  let out = absolute-node-style(overrides)
   if scale == 1 { return out }
 
-  if "min-size" in out {
-    assert(type(out.min-size) == length, message: "shape part min-size must be a non-negative length")
-    out.min-size = out.min-size * scale
+  for key in ("min-size", "min-width", "min-height", "radius", "mark-size", "mark-thickness") {
+    if key in out { out.insert(key, scale-length(out.at(key), scale)) }
   }
-  if "min-width" in out { out.min-width *= scale }
-  if "min-height" in out { out.min-height *= scale }
   if "inset" in out { out.inset = scale-inset(out.inset, scale) }
-  if "radius" in out {
-    if type(out.radius) == length {
-      out.radius = out.radius * scale
-    } else if type(out.radius) == relative {
-      out.radius = out.radius.ratio + out.radius.length * scale
-    }
-  }
-
-  if "stroke" in out {
-    out.stroke = scale-stroke(out.stroke, scale)
-  }
-  if "mark-size" in out {
-    let size = out.at("mark-size")
-    if type(size) == length { out.mark-size = size * scale }
-    if type(size) == relative { out.mark-size = size.ratio + size.length * scale }
-  }
-  if "mark-thickness" in out {
-    let thickness = out.at("mark-thickness")
-    if type(thickness) == length { out.mark-thickness = thickness * scale }
-    if type(thickness) == relative { out.mark-thickness = thickness.ratio + thickness.length * scale }
-  }
+  if "stroke" in out { out.stroke = scale-stroke(out.stroke, scale) }
   out
 }
 
@@ -110,12 +87,6 @@
     (-half-thick, -half-thick),
   )
   (kind: "polygon", points: orient-points(raw, style), label-offset: (0pt, 0pt))
-}
-
-#let _scaled-mark-length(value, scale) = {
-  if type(value) == length { value * scale }
-  else if type(value) == relative { value.ratio + value.length * scale }
-  else { value }
 }
 
 #let _mark-ink(style, scale) = {
@@ -222,12 +193,12 @@
     reference
   }
   let size = _resolve-style-length(
-    _scaled-mark-length(requested-size, scale),
+    scale-length(requested-size, scale),
     fallback,
   )
   if size <= 0pt { return () }
   let thickness = _resolve-style-length(
-    _scaled-mark-length(style.at("mark-thickness", default: auto), scale),
+    scale-length(style.at("mark-thickness", default: auto), scale),
     ink.thickness,
   )
   if thickness <= 0pt { return () }
@@ -258,12 +229,12 @@
   let (half-width, half-height) = extents
   let fallback = calc.max(calc.min(half-width * 1.35, 16pt * scale), 8pt * scale)
   let size = _resolve-style-length(
-    _scaled-mark-length(style.at("mark-size", default: auto), scale),
+    scale-length(style.at("mark-size", default: auto), scale),
     fallback,
   )
   if size <= 0pt { return () }
   let thickness = _resolve-style-length(
-    _scaled-mark-length(style.at("mark-thickness", default: auto), scale),
+    scale-length(style.at("mark-thickness", default: auto), scale),
     ink.thickness,
   )
   if thickness <= 0pt { return () }
@@ -422,7 +393,7 @@
 // ---------------------------------------------------------------------
 
 #let make-node(
-  kind, x, y,
+  kind,
   label: none,
   name: none,
   style: (:),
@@ -430,13 +401,13 @@
   size-scale: 1,
   ..extra,
 ) = {
+  assert(extra.pos().len() <= 2, message: "make-node() accepts extra fields only by name")
+  let (x, y) = position-args(extra, allow-extra: true).position
   assert(type(kind) == str, message: "node kind must be a string, got " + repr(kind))
-  assert(type(x) in (int, float) and type(y) in (int, float), message: "node coordinates must be numbers")
   assert(name == none or type(name) == str, message: "node name must be a string or none")
   assert(type(style) == dictionary, message: "node style must be a dictionary, got " + repr(style))
   assert(type(base-style) == dictionary, message: "node base-style must be a dictionary, got " + repr(base-style))
   assert(type(size-scale) in (int, float) and size-scale > 0, message: "node size-scale must be positive")
-  assert(extra.pos().len() == 0, message: "make-node() accepts extra fields only by name")
   let reserved = ("type", "kind", "x", "y", "label", "name", "style", "base-style", "size-scale")
   let overlap = extra.named().keys().filter(key => key in reserved)
   assert(
@@ -462,6 +433,7 @@
 /// Creates a reusable node constructor with a semantic `kind` and optional
 /// themeable factory defaults. The returned function has the same common
 /// `(x, y, label:, name:, style:)` interface as the built-in node kinds.
+/// A single point can replace x/y, and either axis can be deferred.
 ///
 /// `flippable: true` additionally exposes a top-level `flip: auto` argument
 /// that forwards into `style.flip` (an explicit `flip:` wins over any
@@ -473,14 +445,16 @@
   assert(type(base-style) == dictionary, message: "node-type() base-style must be a dictionary")
   assert(type(flippable) == bool, message: "node-type() flippable must be a boolean")
   if flippable {
-    (x, y, label: none, flip: auto, name: none, style: (:)) => {
+    (label: none, flip: auto, name: none, style: (:), ..position) => {
       if flip != auto { style.flip = flip }
+      let (x, y) = position-args(position).position
       make-node(kind, x, y, label: label, name: name, style: style, base-style: base-style)
     }
   } else {
-    (x, y, label: none, name: none, style: (:)) => make-node(
-      kind, x, y, label: label, name: name, style: style, base-style: base-style,
-    )
+    (label: none, name: none, style: (:), ..position) => {
+      let (x, y) = position-args(position).position
+      make-node(kind, x, y, label: label, name: name, style: style, base-style: base-style)
+    }
   }
 }
 
@@ -489,7 +463,10 @@
 /// a one-off shape, or an invisible routing waypoint for `edge()` (its
 /// original purpose: participates in edge routing and the diagram's
 /// bounding box, but draws nothing unless you give it a `shape:`).
-#let node(x, y, label: none, name: none, style: (:), kind: "node", base-style: (:)) = {
+/// Accepts node(point, ..) or node(x, y, ..); point references are resolved
+/// after outlines are prepared. A node point denotes its center.
+#let node(label: none, name: none, style: (:), kind: "node", base-style: (:), ..position) = {
+  let (x, y) = position-args(position).position
   make-node(kind, x, y, label: label, name: name, style: style, base-style: base-style)
 }
 
@@ -498,7 +475,9 @@
 /// plain-box look; pass `style:` for anything not covered by those, e.g.
 /// `min-size`). Useful for scalars-with-a-border, annotated groupings, or
 /// any other "just a labeled box" shape that isn't one of the named kinds.
-#let box(x, y, label: none, fill: auto, stroke: auto, inset: auto, radius: auto, name: none, style: (:)) = {
+/// A single point can replace x/y: box(port, label: [A]).
+#let box(label: none, fill: auto, stroke: auto, inset: auto, radius: auto, name: none, style: (:), ..position) = {
+  let (x, y) = position-args(position).position
   if fill != auto { style.fill = fill }
   if stroke != auto { style.stroke = stroke }
   if inset != auto { style.inset = inset }
@@ -538,10 +517,11 @@
 /// at a minimum that grows when an axis has multiple legs so a many-legged
 /// gate has room to fan out; a lone port adds no size floor. It therefore
 /// follows the diagram's `scale` zoom and ignores
-/// `scale-edges`, exactly as the spiders do. `size: (width, height)` (lengths)
-/// overrides that minimum; `inset:` is the label-to-edge padding.
+/// `scale-edges`, exactly as the spiders do. `size:` accepts one length for a
+/// square or a `(width, height)` pair and overrides that minimum; `inset:` is
+/// the label-to-edge padding. An unlabeled gate has no implicit label inset,
+/// so a theme's compact `min-size` remains authoritative.
 #let gate(
-  x, y, label,
   legs: (left: 1, right: 1),
   max-legs-per-side: none,
   port-spacing: auto,
@@ -550,7 +530,11 @@
   name: none,
   style: (:),
   kind: "gate",
+  ..position,
 ) = {
+  let parsed = position-args(position, source: "gate", trailing: 1)
+  let (x, y) = parsed.position
+  let label = parsed.tail.first()
   let sides = ("left", "right", "top", "bottom")
   assert(type(legs) == dictionary, message: "gate legs must be a dictionary")
   assert(legs.keys().all(side => side in sides), message: "gate legs accepts only left/right/top/bottom")
@@ -569,20 +553,28 @@
     )
   }
   assert(
-    port-spacing == auto or (type(port-spacing) == length and port-spacing > 0pt),
+    port-spacing == auto or is-size-length(port-spacing, positive: true),
     message: "gate port-spacing must be auto or a positive length",
   )
   assert(
-    size == auto or (
-      type(size) == array and size.len() == 2
-        and size.all(value => type(value) == length and value >= 0pt)
-    ),
-    message: "gate size must be auto or a (width, height) pair of non-negative lengths",
+    size == auto
+      or is-size-length(size)
+      or (
+        type(size) == array and size.len() == 2
+          and size.all(is-size-length)
+      ),
+    message: "gate size must be auto, a non-negative length, or a (width, height) pair of non-negative lengths",
   )
+  if type(size) == length { size = (size, size) }
   if inset != auto { style.inset = inset }
+  let base-style = if label == none {
+    gate-base-style + (inset: 0pt)
+  } else {
+    gate-base-style
+  }
   make-node(
     kind, x, y, label: label, name: name, style: style,
-    base-style: gate-base-style,
+    base-style: base-style,
     size: size, legs: legs, port-layout: "box", port-spacing: port-spacing,
   )
 }
@@ -595,6 +587,8 @@
 /// The exact coordinate is resolved when the diagram is laid out — only then
 /// is the box's rendered size known — so ports sit on the outline at every
 /// scale and for every label.
+/// Also usable as a node/content position or through deferred .x/.y fields.
+/// port(ref("name"), side) looks up an emitted gate instead of capturing one.
 #let port(node-ref, side, ..args) = {
   // The index may be given positionally (`port(g, "left", 1)`) or by name
   // (`port(g, "left", index: 1)`), and defaults to the first port.
@@ -605,21 +599,25 @@
     message: "port() takes a node, a side, and optionally an index — got " + repr(args),
   )
   let index = if args.pos().len() > 0 { args.pos().first() } else { args.named().at("index", default: 0) }
-  let n = unwrap-node(node-ref)
-  assert(n != none, message: "port() expects a node value, e.g. the result of gate(..)")
-  if n.at("port-layout", default: none) != "box" {
+  let named = type(node-ref) == dictionary and node-ref.at("type", default: none) == "ref"
+  let n = if named { node-ref } else { unwrap-node(node-ref) }
+  assert(n != none, message: "port() expects a node value or named ref, e.g. the result of gate(..)")
+  if not named and n.at("port-layout", default: none) != "box" {
     assert(false, message: "port() expects a port-capable node such as gate(), got " + repr(n.kind))
   }
   assert(
     side in ("left", "right", "top", "bottom"),
     message: "port side must be \"left\", \"right\", \"top\" or \"bottom\", got " + repr(side),
   )
-  let count = n.legs.at(side, default: 0)
+  if named {
+    assert(type(index) == int and index >= 0, message: "port index must be a non-negative integer")
+  }
+  let count = if named { 0 } else { n.legs.at(side, default: 0) }
   assert(
-    type(index) == int and index >= 0 and index < count,
-    message: "gate has no port #" + str(index) + " on side \"" + side + "\" (it has " + str(count) + ")",
+    named or (type(index) == int and index >= 0 and index < count),
+    message: "gate has no port #" + repr(index) + " on side \"" + side + "\" (it has " + str(count) + ")",
   )
-  (type: "port", node: n, side: side, index: index)
+  with-coordinates((type: "port", node: n, side: side, index: index))
 }
 
 // ---------------------------------------------------------------------
@@ -707,63 +705,18 @@
 /// union a shifted label without another layout pass. Returning signed sides
 /// as well as width/height preserves asymmetric `label-offset` bounds.
 #let outline-size(outline, measured) = {
-  if outline.kind == "parts" {
-    let size = _outline-size-simple(outline.base.outline, measured)
-    let out = (left: size.left, right: size.right, top: size.top, bottom: size.bottom)
-    let measured-part = (width: 0pt, height: 0pt)
-    for part in outline.parts {
-      let p = _outline-size-simple(part.outline, measured-part)
-      let shift = if part.transform == none { (0pt, 0pt) } else { part.transform }
-      let pl = p.left + shift.at(0)
-      let pr = p.right + shift.at(0)
-      let pt = p.top + shift.at(1)
-      let pb = p.bottom + shift.at(1)
-      if pl < out.left { out.left = pl }
-      if pr > out.right { out.right = pr }
-      if pt < out.top { out.top = pt }
-      if pb > out.bottom { out.bottom = pb }
-    }
-    return (
-      left: out.left, right: out.right,
-      top: out.top, bottom: out.bottom,
-      width: out.right - out.left, height: out.bottom - out.top,
-    )
+  if outline.kind != "parts" { return _outline-size-simple(outline, measured) }
+  let out = _outline-size-simple(outline.base.outline, measured)
+  let measured-part = (width: 0pt, height: 0pt)
+  for part in outline.parts {
+    let p = _outline-size-simple(part.outline, measured-part)
+    let shift = if part.transform == none { (0pt, 0pt) } else { part.transform }
+    out.left = calc.min(out.left, p.left + shift.at(0))
+    out.right = calc.max(out.right, p.right + shift.at(0))
+    out.top = calc.min(out.top, p.top + shift.at(1))
+    out.bottom = calc.max(out.bottom, p.bottom + shift.at(1))
   }
-
-  if outline.kind == "empty" {
-    return (
-      left: 0pt, right: 0pt, top: 0pt, bottom: 0pt,
-      width: 0pt, height: 0pt,
-    )
-  }
-  if outline.kind == "bare" {
-    let (half-width, half-height) = (measured.width / 2, measured.height / 2)
-    return (
-      left: -half-width, right: half-width,
-      top: -half-height, bottom: half-height,
-      width: measured.width, height: measured.height,
-    )
-  }
-  let (half-width, half-height) = if outline.kind == "circle" {
-    (outline.radius, outline.radius)
-  } else {
-    (outline.half-width, outline.half-height)
-  }
-  let left = -half-width
-  let right = half-width
-  let top = -half-height
-  let bottom = half-height
-  if measured.width > 0pt or measured.height > 0pt {
-    let (label-x, label-y) = outline.at("label-offset", default: (0pt, 0pt))
-    left = calc.min(left, label-x - measured.width / 2)
-    right = calc.max(right, label-x + measured.width / 2)
-    top = calc.min(top, label-y - measured.height / 2)
-    bottom = calc.max(bottom, label-y + measured.height / 2)
-  }
-  (
-    left: left, right: right, top: top, bottom: bottom,
-    width: right - left, height: bottom - top,
-  )
+  out + (width: out.right - out.left, height: out.bottom - out.top)
 }
 
 /// Half-extents for an outline with a drawable boundary. Used by generic
@@ -773,11 +726,7 @@
   if outline.kind == "parts" {
     return outline-half-extents(outline.base.outline)
   }
-  if outline.kind == "circle" { (outline.radius, outline.radius) }
-  else if outline.kind in ("ellipse", "rect", "polygon") {
-    (outline.half-width, outline.half-height)
-  }
-  else { none }
+  _outline-half-extents-simple(outline)
 }
 
 /// Resolves one rectangularly distributed gate port onto the node's actual
@@ -785,6 +734,7 @@
 /// polygon the candidate direction is projected with the same radius query
 /// used for edge clipping. Returned y follows diagram convention (+y up).
 #let gate-port-on-outline(outline, legs, side, index, rotate: 0deg, port-spacing: auto) = {
+  let port-spacing = absolute-length(port-spacing)
   assert(type(rotate) == angle, message: "gate port rotation must be an angle")
   assert(
     port-spacing == auto or (type(port-spacing) == length and port-spacing > 0pt),
@@ -811,49 +761,11 @@
   (tx / magnitude * radius, ty / magnitude * radius)
 }
 
-#let _draw-outline-simple(outline, fill, stroke, label-body, include-label: true) = {
-  if outline.kind == "empty" {
-    []
-  } else if outline.kind == "bare" {
-    if include-label { label-body } else { [] }
-  } else if outline.kind == "circle" {
-    let (label-x, label-y) = outline.at("label-offset", default: (0pt, 0pt))
-    let body = circle(radius: outline.radius, fill: fill, stroke: stroke, inset: 0pt)
-    if include-label {
-      if label-body == [] { body } else { overlay(
-        body,
-        align(center + horizon, move(dx: label-x, dy: label-y, label-body)),
-      ) }
-    } else { body }
-  } else if outline.kind == "ellipse" {
-    let (label-x, label-y) = outline.at("label-offset", default: (0pt, 0pt))
-    let body = ellipse(
-      width: 2 * outline.half-width, height: 2 * outline.half-height,
-      fill: fill, stroke: stroke, inset: 0pt,
-    )
-    if include-label {
-      overlay(
-        body,
-        align(center + horizon, move(dx: label-x, dy: label-y, label-body)),
-      )
-    } else { body }
-  } else if outline.kind == "rect" {
-    let (width, height) = (
-      outline.half-width * 2,
-      outline.half-height * 2,
-    )
-    let (label-x, label-y) = outline.at("label-offset", default: (0pt, 0pt))
-    let body = rect(
-      width: width, height: height, fill: fill, stroke: stroke,
-      radius: outline.radius, inset: 0pt,
-    )
-    if include-label {
-      overlay(
-        body,
-        align(center + horizon, move(dx: label-x, dy: label-y, label-body)),
-      )
-    } else { body }
-  } else if outline.kind == "polygon" {
+#let _draw-outline-simple(outline, fill, stroke, label-body) = {
+  if outline.kind == "empty" { return [] }
+  if outline.kind == "bare" { return label-body }
+  let (label-x, label-y) = outline.at("label-offset", default: (0pt, 0pt))
+  if outline.kind == "polygon" {
     let (half-width, half-height) = (
       outline.half-width,
       outline.half-height,
@@ -862,15 +774,24 @@
       point.at(0) + half-width,
       point.at(1) + half-height,
     ))
-    let (label-x, label-y) = outline.at("label-offset", default: (0pt, 0pt))
-    std-box(width: 2 * half-width, height: 2 * half-height, inset: 0pt, {
+    return std-box(width: 2 * half-width, height: 2 * half-height, inset: 0pt, {
       place(top + left, polygon(fill: fill, stroke: stroke, ..points))
-      if include-label {
+      if label-body != [] {
         place(center + horizon, dx: label-x, dy: label-y, label-body)
       }
     })
-  } else {
-    []
+  }
+  let body = if outline.kind == "circle" {
+    circle(radius: outline.radius, fill: fill, stroke: stroke, inset: 0pt)
+  } else if outline.kind == "ellipse" {
+    ellipse(width: 2 * outline.half-width, height: 2 * outline.half-height,
+      fill: fill, stroke: stroke, inset: 0pt)
+  } else if outline.kind == "rect" {
+    rect(width: 2 * outline.half-width, height: 2 * outline.half-height,
+      fill: fill, stroke: stroke, radius: outline.radius, inset: 0pt)
+  } else { return [] }
+  if label-body == [] { body } else {
+    overlay(body, align(center + horizon, move(dx: label-x, dy: label-y, label-body)))
   }
 }
 
@@ -963,18 +884,16 @@
   // can restyle a reusable type. Per-diagram and per-instance styles remain
   // above both.
   let factory = n.at("base-style", default: (:))
-  let style = resolve-node-style(
+  let style = absolute-node-style(resolve-node-style(
     n.kind, (:), factory, preset, override, n.style,
-  )
+  ))
   // A node's own size multiplier (from `group(scale: ..)`) composes with the
   // diagram-wide zoom, so both shape and label track the diagram's size.
   let k = n.size-scale * size-factor
   style.min-width *= k
   style.min-height *= k
   style.inset = scale-inset(style.inset, k)
-  style.radius = if type(style.radius) == length { style.radius * k }
-    else if type(style.radius) == relative { style.radius.ratio + style.radius.length * k }
-    else { style.radius }
+  style.radius = scale-length(style.radius, k)
   style.stroke = scale-stroke(style.stroke, k)
 
   // Fail stale string-based styles before paying for label measurement.
@@ -993,7 +912,10 @@
 
   let resolved-port-spacing = n.at("port-spacing", default: auto)
   if resolved-port-spacing == auto { resolved-port-spacing = port-spacing }
-  if resolved-port-spacing != auto { resolved-port-spacing *= k }
+  if resolved-port-spacing != auto {
+    resolved-port-spacing = absolute-length(resolved-port-spacing) * k
+    assert(resolved-port-spacing > 0pt, message: "gate port-spacing must be auto or a positive length")
+  }
 
   // A gate is a rectangle whose floor grows when an axis has multiple ports,
   // so a many-legged gate has room to fan its wires out. A lone port needs no
@@ -1013,7 +935,9 @@
       0pt
     }
     let (w0, h0) = if n.size != auto {
-      (n.size.at(0) * k, n.size.at(1) * k)
+      let size = n.size.map(value => absolute-length(value) * k)
+      assert(size.all(value => value >= 0pt), message: "gate size must be auto, a non-negative length, or a (width, height) pair of non-negative lengths")
+      size
     } else {
       (
         calc.max(style.min-width, port-floor(across, 12pt)),

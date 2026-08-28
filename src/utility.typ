@@ -26,6 +26,21 @@
   }
 }
 
+// Never stringify deferred coordinates: captured node graphs can share both
+// axes at every step, making their expanded repr exponentially large. Equal
+// buckets are only candidates; exact value equality remains authoritative.
+#let coordinate-key(value) = if type(value) in (int, float) { value } else { "deferred" }
+#let node-key(n) = if n.name != none {
+  repr(("named", n.name))
+} else {
+  repr((
+    coordinate-key(n.x), coordinate-key(n.y), n.kind, n.label, n.style,
+    n.at("base-style", default: (:)), n.size-scale,
+    n.at("port-layout", default: none), n.at("legs", default: (:)),
+    n.at("size", default: auto),
+  ))
+}
+
 // Plain 2-vectors, used throughout for diagram-unit coordinate maths.
 #let vadd(a, b) = (a.at(0) + b.at(0), a.at(1) + b.at(1))
 #let vsub(a, b) = (a.at(0) - b.at(0), a.at(1) - b.at(1))

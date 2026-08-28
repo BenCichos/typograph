@@ -6,7 +6,7 @@
 // apart. Styles store builders directly (`shape: shapes.circle`), so no
 // secondary name-to-shape mapping has to stay synchronized with a theme.
 
-#import "geometry.typ": rotate-point, rotate-points, orient-point, orient-points, regular-polygon as _regular-points
+#import "geometry.typ": num, rotate-point, rotate-points, orient-point, orient-points, regular-polygon as _regular-points
 
 // ---------------------------------------------------------------------------
 // Shared sizing and outline helpers
@@ -24,6 +24,13 @@
   } else {
     (width, height)
   }
+}
+
+// A valid polygon must surround the origin. With neutral zero-size defaults,
+// preserve the builder's template by supplying a 1pt fitting axis wherever
+// no extent was requested. Nonzero dimensions keep their existing sizing.
+#let _fit-polygon-box(label, pad, style, ..options) = {
+  fit-box(label, pad, style, ..options).map(axis => if axis == 0pt { 1pt } else { axis })
 }
 
 // Area and even/odd containment for the fixed point (0, 0), derived in one
@@ -142,10 +149,19 @@
   (kind: "bare")
 }
 
-/// A circle fitted to the larger label axis.
+/// A circle fitted to the label's farthest corner, including asymmetric pad.
+/// Retains the minimum size and 1.2-axis clearance when they are larger.
 #let circle(label, pad, style) = {
   let (width, _,) = fit-box(label, pad, style, clear-x: 1.2, clear-y: 1.2, square: true)
-  (kind: "circle", radius: width / 2)
+  let radius = width / 2
+  if label.width > 0pt or label.height > 0pt {
+    // shape-outline offsets the label by half the opposite-side padding
+    // difference. Include that shift so all four label corners remain inside.
+    let x = num((label.width + calc.abs(pad.left - pad.right)) / 2)
+    let y = num((label.height + calc.abs(pad.top - pad.bottom)) / 2)
+    radius = calc.max(radius, calc.sqrt(x * x + y * y) * 1pt)
+  }
+  (kind: "circle", radius: radius)
 }
 
 /// An axis-aligned ellipse fitted independently on both axes.
@@ -225,7 +241,7 @@
   // once. Per node we only scale and, if requested, rotate these unit points.
   let unit-points = _regular-points(vertices, 1, rotate: rotate)
   (label, pad, style) => {
-    let (width, _,) = fit-box(label, pad, style, clear-x: breathing-room, clear-y: breathing-room, square: true)
+    let (width, _,) = _fit-polygon-box(label, pad, style, clear-x: breathing-room, clear-y: breathing-room, square: true)
     let radius = width / 2
     let points = unit-points.map(point => (point.at(0) * radius, point.at(1) * radius,))
     _polygon(rotate-points(points, style.rotate))
@@ -305,7 +321,7 @@
 /// is the centered-label alternative. Honors `style.flip` like the other
 /// directional builders below.
 #let _triangle-equilateral(label, pad, style) = {
-  let (width, _,) = fit-box(label, pad, style, clear-x: 2.1, clear-y: 2.1, square: true)
+  let (width, _,) = _fit-polygon-box(label, pad, style, clear-x: 2.1, clear-y: 2.1, square: true)
   let radius = width / 2
   _polygon(orient-points(_regular-points(3, radius), style), label-offset: orient-point((-radius * 0.16, 0pt), style))
 }
@@ -313,7 +329,7 @@
 #let _triangle-isosceles(ratio, label, pad, style) = {
   assert(type(ratio) in (int, float), message: "triangle(\"isosceles\") ratio must be a number")
   assert(ratio > 0, message: "triangle(\"isosceles\") ratio must be positive")
-  let (width, _,) = fit-box(label, pad, style, clear-x: 2.1, clear-y: 2.1, square: true)
+  let (width, _,) = _fit-polygon-box(label, pad, style, clear-x: 2.1, clear-y: 2.1, square: true)
   let points = _regular-points(3, width / 2).map(
     point => (point.at(0) * ratio, point.at(1)),
   )
@@ -331,7 +347,7 @@
 }
 
 #let _triangle-angles(angles, label, pad, style) = {
-  let (width, _,) = fit-box(label, pad, style, clear-x: 2.1, clear-y: 2.1, square: true)
+  let (width, _,) = _fit-polygon-box(label, pad, style, clear-x: 2.1, clear-y: 2.1, square: true)
   let (half-width, half-height) = (width / 2, width / 2)
   let raw = angles.map(angle => (calc.cos(angle), calc.sin(angle)))
   let scaled = raw.map(point => (point.at(0) * half-width, point.at(1) * half-height))
@@ -376,14 +392,14 @@
 /// A wide directional triangle whose label sits in its broad body. Honors
 /// `style.flip`.
 #let flat-triangle(label, pad, style) = {
-  let (width, height) = fit-box(label, pad, style, clear-x: 2.0, clear-y: 1.6)
+  let (width, height) = _fit-polygon-box(label, pad, style, clear-x: 2.0, clear-y: 1.6)
   let (half-width, half-height) = (width / 2, height / 2)
   let raw = ((-half-width, -half-height), (half-width, 0pt), (-half-width, half-height),)
   _polygon(orient-points(raw, style), label-offset: orient-point((-half-width * 0.42, 0pt), style))
 }
 
 #let broad-triangle(label, pad, style) = {
-  let (width, height) = fit-box(label, pad, style, clear-x: 1.25, clear-y: 6.0)
+  let (width, height) = _fit-polygon-box(label, pad, style, clear-x: 1.25, clear-y: 6.0)
   let (half-width, half-height) = (width / 2, height / 2)
   let raw = ((-half-width, -half-height), (half-width, 0pt), (-half-width, half-height),)
   _polygon(orient-points(raw, style), label-offset: orient-point((-0.15 * half-width, 0pt), style))
@@ -392,7 +408,7 @@
 /// A trapezoid whose top edge is controlled by `style.slant`. Honors
 /// `style.flip`, mirrored before rotation.
 #let trapezoid(label, pad, style) = {
-  let (width, height) = fit-box(label, pad, style, clear-x: 1.15, clear-y: 1.0)
+  let (width, height) = _fit-polygon-box(label, pad, style, clear-x: 1.15, clear-y: 1.0)
   let (half-width, half-height) = (width / 2, height / 2)
   let slant = half-height * style.slant
   let points = (
@@ -409,7 +425,7 @@
 #let arrow(label, pad, style) = {
   let tip = style.tip
   assert(type(tip) in (int, float) and tip > -1 and tip <= 1, message: "arrow tip must be in (-1, 1]")
-  let (width, height) = fit-box(label, pad, style)
+  let (width, height) = _fit-polygon-box(label, pad, style)
   let half-width = width / (1 + tip)
   let half-height = height / 2
   let points = (
@@ -424,7 +440,7 @@
 
 /// A rhombus on its points, fitted independently on both axes.
 #let diamond(label, pad, style) = {
-  let (width, height) = fit-box(label, pad, style, clear-x: 1.45, clear-y: 1.45)
+  let (width, height) = _fit-polygon-box(label, pad, style, clear-x: 1.45, clear-y: 1.45)
   let (half-width, half-height) = (width / 2, height / 2)
   let points = ((-half-width, 0pt), (0pt, -half-height), (half-width, 0pt), (0pt, half-height),)
   _polygon(rotate-points(points, style.rotate))

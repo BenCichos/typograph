@@ -1,0 +1,69 @@
+# Review Fixes
+
+All six correctness issues reproduced during the 2026-08-27 review are fixed
+in this checkout. Their nine reproductions now live in `tests/regressions/`
+and must pass with Typst 0.15.1. This page retains its original URL for
+existing links and records the behavior changes; it is not an inventory of
+outstanding failures.
+
+## Font-relative geometry {#font-relative-geometry}
+
+Geometric `em` components now resolve against surrounding text before zoom,
+clipping, polygon validation, port projection, or bounds arithmetic. Node
+minima/insets/radii, gate size/spacing, stroke thickness, edge label/highlight
+geometry, and decorative parts/marks all use this boundary. Manual
+`.to-absolute()` workarounds are no longer needed:
+
+```typ
+#set text(size: 10pt)
+#typ.diagram(scale: 2, typ.edge(
+  typ.node(0, 0, style: (shape: typ.shapes.diamond, min-size: 2em)),
+  (2, 0), stroke: 0.1em + black,
+))
+```
+
+Absolute-only, unlabeled geometry helpers remain usable without `context`.
+Mixed-sign dimensions are checked again after resolution; negative sizes
+still fail. Custom extension fields remain the builder's responsibility.
+See [Font-relative lengths](../reference/diagram.qmd#font-relative-lengths).
+
+## Highlight bounds at acute joins
+
+Bounds now include the maximum offset-centerline displacement **and** the
+band stroke's miter extension. Single-segment curves receive the same
+allowance because their highlights are sampled into polylines. Rendering and
+bounds share the two miter limits, so changing one cannot silently invalidate
+the other. These conservative bounds can add whitespace around highlighted
+joins; they are not a pixel-tight ink crop.
+
+## Square-capped diagonal wire bounds
+
+Open square-capped wires now reserve up to `sqrt(2)` times half their stroke
+thickness on each axis, covering a diagonal cap's tangent and normal
+projections. Miter allowance can enlarge this further. Butt/round caps and
+closed node outlines retain their existing bounds.
+
+## Automatic config values {#automatic-config-values}
+
+Passing `auto` now inherits the enclosing config value, including for
+`node-styles` and `edge-styles`. Without an enclosing value, the package
+default applies. Two existing meaningful automatic values are preserved:
+`font-size: auto` restores surrounding document text sizing and
+`baseline: auto` restores the calculated baseline. Use concrete values such
+as `scale: 1` to reset other keys. Nested scopes still restore their parent.
+
+## Zero-sized built-in polygons
+
+Built-in polygon builders supply a `1pt` fitting fallback for any zero axis,
+before applying their template's proportions and rotation. This preserves a
+valid outline when no label, inset, or minimum supplies an extent. Explicit
+nonzero dimensions remain unchanged. Custom polygon validity checks remain
+strict. Use `shapes.empty` when an invisible routing point is intended.
+
+## Circle fitting for box-like labels
+
+The circle radius now contains the farthest corner of the measured label
+rectangle, including shifts from asymmetric padding. Larger explicit minima
+and the existing 1.2-axis clearance still win. A `20pt` square therefore gets
+a radius of approximately `14.14pt`, not `12pt`; thin labels that already fit
+are unchanged. Unlabeled zero-size circles stay zero-sized.

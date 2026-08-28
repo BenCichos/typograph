@@ -15,7 +15,7 @@ trap 'rm -rf "$TEST_TMP"' EXIT
 # through the manifest/package loader at the exact path this package will
 # ship under once published, to catch entrypoint/facade regressions.
 if ! mkdir -p "$TEST_TMP/packages/preview/typograph" \
-  || ! ln -s "$PWD" "$TEST_TMP/packages/preview/typograph/0.2.1"; then
+  || ! ln -s "$PWD" "$TEST_TMP/packages/preview/typograph/0.3.0"; then
   echo "could not stage local package fixture" >&2
   exit 1
 fi
@@ -23,9 +23,58 @@ export TYPST_PACKAGE_PATH="$TEST_TMP/packages"
 
 expected_error() {
   case "$(basename "$1")" in
+    position-bad-point.typ|position-bad-pair.typ|position-rel-node.typ|position-rel-place.typ|position-offset-source.typ) echo 'position must be a coordinate pair, node, port, or ref' ;;
+    position-extra-arguments.typ) echo 'node expects a point or x, y' ;;
+    position-unknown-argument.typ) echo 'unexpected named argument' ;;
+    position-offset-length.typ|position-offset-type.typ) echo 'offset() dx/dy must be numbers in diagram units' ;;
+    position-missing-ref.typ|position-missing-port-ref.typ) echo 'found no node with that name' ;;
+    position-named-port-not-gate.typ) echo 'port() expects a port-capable node' ;;
+    position-named-port-index.typ) echo 'gate has no port' ;;
+    position-named-port-negative-index.typ|position-named-port-fractional-index.typ) echo 'port index must be a non-negative integer' ;;
+    position-cycle-self.typ|position-cycle-mutual.typ|position-cycle-axes.typ|position-cycle-ports.typ) echo 'cyclic position dependency:' ;;
+    position-place-coordinate.typ) echo 'place coordinates must be numbers or deferred coordinates' ;;
+    position-quad-control.typ) echo 'quad() control must be a numeric' ;;
+    position-group-pivot.typ) echo 'group pivot must be a numeric' ;;
+    diagram-body-type.typ) echo 'diagram body must produce diagram items' ;;
+    diagram-unexpected-item.typ) echo 'unexpected item' ;;
+    diagram-font-size.typ|diagram-font-size-resolved-negative.typ) echo 'diagram font-size must be auto or a positive length' ;;
+    diagram-edge-scale.typ) echo 'scale-edges must be positive' ;;
+    diagram-anchor.typ) echo 'diagram anchor must be a number' ;;
+    diagram-math-axis.typ) echo 'diagram math-axis must be a length' ;;
+    diagram-baseline.typ) echo 'diagram baseline must be auto or a length' ;;
+    gate-size-negative.typ|gate-size-resolved-negative.typ) echo 'gate size must be auto, a non-negative length' ;;
+    gate-size-pair-negative.typ) echo 'gate size must be auto, a non-negative length' ;;
+    gate-size-unitless.typ) echo 'gate size must be auto, a non-negative length' ;;
+    gate-unknown-side.typ) echo 'gate legs accepts only left/right/top/bottom' ;;
+    gate-max-legs-type.typ) echo 'max-legs-per-side must be a non-negative integer' ;;
+    port-duplicate-index.typ) echo 'port() takes a node, a side, and optionally an index' ;;
+    port-invisible-shape.typ) echo 'port() needs a node shape with a drawable boundary' ;;
+    node-coordinate-type.typ) echo 'node coordinates must be numbers' ;;
+    node-size-scale.typ) echo 'node size-scale must be positive' ;;
+    node-extra-positional.typ) echo 'make-node() accepts extra fields only by name' ;;
+    node-font-size.typ|node-font-size-resolved-negative.typ) echo 'font-size must be auto or a positive length' ;;
+    node-flip-type.typ) echo 'flip must be a boolean' ;;
+    rect-radius-negative.typ) echo 'rect/square radius must be non-negative' ;;
+    edge-preset-type.typ) echo 'edge preset must be a string or none' ;;
+    edge-clip-type.typ) echo 'edge clip must be auto or a boolean' ;;
+    edge-bend-type.typ) echo 'edge bend must be a number' ;;
+    edge-smooth-path-element.typ) echo 'smooth() expects a node, port, ref, rel, or coordinate, not a path element' ;;
+    edge-highlight-opacity.typ) echo 'highlight-opacity must be a percentage from 0% to 100%' ;;
+    edge-highlight-width.typ|edge-highlight-width-resolved-negative.typ) echo 'highlight-width must be a non-negative length' ;;
+    edge-label-size.typ|edge-label-size-resolved-negative.typ) echo 'label-size must be auto or a positive length' ;;
+    primitive-missing-field.typ) echo 'without required field(s): radius' ;;
+    primitive-result-type.typ) echo 'node shape builder must return an outline dictionary' ;;
+    primitive-negative-axis.typ) echo 'ellipse outline half-width/half-height must be non-negative lengths' ;;
+    part-transform-type.typ) echo 'shape part transform must be a (dx, dy) length pair' ;;
+    part-layer.typ) echo 'shape part layer must be' ;;
+    parts-empty.typ) echo 'shape.parts must contain at least one entry' ;;
+    polygon-clearance.typ) echo 'polygon clearance must be a positive number or pair' ;;
+    group-scale.typ) echo 'group scale must be a positive number' ;;
+    group-rotation-type.typ) echo 'group rotate must be an angle' ;;
+    group-unknown-argument.typ) echo 'unexpected named argument(s)' ;;
     config-positional.typ) echo "config() takes only named arguments" ;;
     config-theme.typ|config-unknown.typ) echo "unknown config option" ;;
-    diagram-zero-scale.typ) echo "diagram scale must be a positive" ;;
+    diagram-zero-scale.typ|diagram-scale-resolved-negative.typ) echo "diagram scale must be a positive" ;;
     diagram-grid-type.typ) echo "diagram grid must be a boolean" ;;
     diagram-inset-unknown.typ) echo "diagram inset has unknown key" ;;
     duplicate-node-name.typ) echo "duplicate node name" ;;
@@ -55,8 +104,8 @@ expected_error() {
     edge-unknown-preset.typ) echo "unknown edge preset" ;;
     gate-invalid-legs.typ) echo "gate leg counts must be non-negative integers" ;;
     gate-max-legs-per-side.typ) echo "gate legs exceed max-legs-per-side" ;;
-    gate-port-spacing.typ) echo "gate port-spacing must be auto or a positive length" ;;
-    diagram-port-spacing.typ) echo "diagram port-spacing must be a positive length" ;;
+    gate-port-spacing.typ|gate-port-spacing-resolved-negative.typ) echo "gate port-spacing must be auto or a positive length" ;;
+    diagram-port-spacing.typ|diagram-port-spacing-resolved-negative.typ) echo "diagram port-spacing must be a positive length" ;;
     group-bad-pivot.typ) echo "group pivot must be a numeric" ;;
     lib-private-alias.typ) echo 'module `typograph` does not contain `core-diagram`' ;;
     make-node-reserved-field.typ) echo "extra fields cannot replace reserved field" ;;
@@ -66,7 +115,8 @@ expected_error() {
     node-unsupported-rotate.typ) echo "rotate is not supported by shapes." ;;
     node-unknown-shape.typ) echo "shape must be a builder function" ;;
     node-inset-unknown.typ) echo "node style inset has unknown key" ;;
-    node-style-min-size.typ) echo "min-size must be a non-negative length" ;;
+    node-style-min-size.typ|part-min-size-resolved-negative.typ) echo "min-size must be a non-negative length" ;;
+    node-min-size-resolved-negative.typ) echo "min-width must be a non-negative length" ;;
     node-style-rotate.typ) echo "rotate must be an angle" ;;
     node-style-bad-mark.typ) echo "node style mark must be none, auto, \"cross\", or \"measurement\"" ;;
     node-style-bad-parts.typ) echo "parts must be an array or dictionary of part specs" ;;
@@ -83,6 +133,7 @@ expected_error() {
     shape-invisible-label-offset.typ) echo "outlines cannot use label-offset" ;;
     shape-labelled-string.typ) echo "shape-labelled must be auto or a builder function" ;;
     triangle-angles-bad.typ) echo "triangle(\"angles\") entries must be angles" ;;
+    triangle-angles-origin.typ) echo "requires the node origin strictly inside the polygon" ;;
     shape-polygon-anchor.typ) echo "requires its anchor inside the polygon" ;;
     shape-polygon-points.typ) echo "needs at least three numeric point pairs" ;;
     shape-regular-vertices.typ) echo "vertices must be an integer of at least 3" ;;
@@ -96,8 +147,13 @@ expected_error() {
   esac
 }
 
+echo "== test-helper contracts =="
+if ! PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_*.py'; then
+  FAIL=1
+fi
+
 echo "== positive tests (must compile) =="
-for f in tests/unit.typ tests/api-contract.typ tests/theme-contract.typ tests/shape-contract.typ tests/config-contract.typ tests/package-contract.typ tests/smoke.typ tests/highlight-waypoints.typ tests/stress.typ tests/shape-stress.typ tests/curve-stress.typ tests/user.typ; do
+for f in tests/unit.typ tests/api-contract.typ tests/theme-contract.typ tests/shape-contract.typ tests/config-contract.typ tests/package-contract.typ tests/geometry-properties.typ tests/transform-contract.typ tests/layout-contract.typ tests/position-contract.typ tests/position-transform-contract.typ tests/review-contract.typ tests/documentation-contract.typ tests/smoke.typ tests/highlight-waypoints.typ tests/stress.typ tests/shape-stress.typ tests/curve-stress.typ tests/user.typ tests/regressions/*.typ; do
   if typst compile --root . "$f" "$TEST_TMP/out.pdf" 2>"$TEST_TMP/error.txt"; then
     echo "  PASS  $f"
   else
@@ -180,5 +236,5 @@ if [ "$FAIL" -ne 0 ]; then
   echo "== RESULT: FAILURES ABOVE =="
   exit 1
 else
-  echo "== RESULT: all tests passed =="
+  echo "== RESULT: all checks passed =="
 fi

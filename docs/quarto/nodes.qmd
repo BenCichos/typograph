@@ -26,6 +26,9 @@ A generic rectangle. `fill`, `stroke`, `inset`, and `radius` are exposed as
 direct arguments (the call-site style layer); anything else, including
 `min-size`, goes in `style:`.
 
+The label is named: `typ.box(0, 0, label: [A])`. In contrast, `gate()` takes
+its label positionally, including `none` for an unlabeled gate.
+
 ```typ
 typ.gate(x, y, label, legs: (left: 1, right: 1), max-legs-per-side: none, port-spacing: auto, size: auto, inset: auto, name: none, style: (:), kind: "gate")
 ```
@@ -38,11 +41,19 @@ automatic minimum grows from the exact center spacing plus a gate margin:
 diagram scale. A lone port adds no size floor. `port-spacing: auto` inherits
 the diagram/config spacing, while `max-legs-per-side` optionally rejects an
 oversubscribed side. Supply `size: (width, height)` to override the automatic
-minimum directly. `kind:` controls which theme preset applies — a
+minimum directly, or one length for a square size. Unlabeled gates do not
+inherit the generic gate's label padding, so a compact theme `min-size` can
+shrink all the way to the requested value without also setting `inset: 0pt`.
+`kind:` controls which theme preset applies — a
 gate with `kind: "measurement"` is independently themeable and still port-capable,
 since port behavior travels as node capability metadata, not as the `"gate"`
 kind specifically. Its shape can be a circle, ellipse, rectangle, or polygon;
 port candidates are projected onto whichever outline is resolved.
+
+`size:` replaces the minimum, not the final dimensions: a larger label or
+explicit inset can still enlarge the gate. Only the positional `none`
+disables implicit label padding; an explicit empty label `[]` still counts
+as a label and selects `shape-labelled` when provided.
 
 ```typ
 typ.port(node, side, index: 0)
@@ -55,6 +66,13 @@ matter that a gate's size depends on its label — and a port carries its
 node with it, so `edge(port(g, "left"), ..)` draws `g` even if nothing else
 references it directly.
 
+Indices start at zero. Left/right sides run from bottom to top; top/bottom
+sides run from left to right. Omitted sides have zero ports. Spacing is
+applied to candidates on the outline's bounding rectangle before projection:
+it remains exact along a sufficiently large straight side, but circular,
+rounded, or other projected boundaries can bring the final ports closer
+together. An explicitly small `size:` does not override this projection.
+
 ```{.typst filename="gates-ports.typ"}
 {{< include img/gates-ports.typ >}}
 ```
@@ -65,6 +83,88 @@ references it directly.
 those leads dead straight regardless of the gate's label or scale — see
 [Deferred endpoints](edges.qmd#deferred-endpoints) for why that offset has to
 be deferred instead of computed up front.
+
+## Relative positioning {#relative-positioning}
+
+Node constructors accept either `x, y` or one point. A point can be a
+coordinate pair, another node (its center), a `port(...)`, a named `ref(...)`,
+or an `offset(...)` result. The same forms work with `place()` and the
+single-node constructors in both companion themes.
+
+```typ
+#typ.diagram({
+  let g = typ.gate((0, 0), [U])
+  let p = typ.port(g, "right")
+  let a = typ.box(typ.offset(p, 1.4, 0), label: [A])
+  let b = typ.box(p.x, -1.2, label: [B])
+  typ.edge(p, a)
+  typ.edge(p, b)
+  typ.place(p.x, -1.8, [same port x])
+})
+```
+
+`typ.box(p, label: [A])` places the box's **center** exactly on the port.
+Use `offset(p, dx, dy)` to move that center away from it; this is not an
+automatic boundary-to-boundary gap or collision-avoidance rule. Offsets are
+signed numbers in diagram units, not lengths such as `4pt`. They follow
+`scale`, `scale-edges`, and group scaling/rotation.
+Successive calls compose into one displacement, so repeatedly calling
+`offset()` does not build an ever-deeper expression. Even a zero offset remains
+an explicit point: an edge to `offset(node, 0, 0)` ends at the node's center
+without silhouette clipping.
+
+Ports, named references, and offsets expose `.x` and `.y`. These are
+deferred coordinate values, not numbers: `p.x + 1` is unsupported; write
+`typ.offset(p, 1, 0).x`. Either axis can be absolute or relative, and they
+can come from different points:
+
+```typ
+typ.box(p.x, -1, label: [one relative axis])
+typ.box(p.x, typ.ref("other").y, label: [two references])
+typ.place(typ.offset(p, 0, -0.5), [caption])
+```
+
+Labels keep their existing calling convention: `gate(p, [U])` takes a
+positional label; `box(p, label: [U])` takes a named label; `place(p, [text])`
+takes a positional body. Numeric calls such as `box(1, 2)` remain valid.
+
+```{.typst filename="relative-positioning.typ"}
+{{< include img/relative-positioning.typ >}}
+```
+
+![A follows both port coordinates while B follows only its x-coordinate, for short and wide gate labels](img/relative-positioning.svg)
+
+### References, capture, and dependencies
+
+Direct node and port values carry their source nodes into the diagram,
+including through offsets and coordinate projections. Reusing the same
+source value draws it once. Named references only look up nodes that the
+diagram otherwise emits; they may refer forward:
+
+```typ
+#typ.diagram({
+  let p = typ.port(typ.ref("later"), "right")
+  typ.box(typ.offset(p, 1, 0), label: [A])
+  typ.gate(0, 0, [U], name: "later")
+})
+```
+
+All node outlines are measured before coordinate dependencies are resolved,
+so port alignment follows labels, theme overrides, shape geometry, and port
+spacing. A missing name, a nonexistent port, or a true coordinate cycle
+produces an error. Dependencies are checked per axis: `a.x` depending on
+`b.x` while `b.y` depends on `a.y` is valid if the remaining axes are fixed.
+No general constraint equations are solved.
+
+Within a `group()`, projections and offsets follow the fragment's local
+axes. Rotation still leaves node graphics and text upright; ports project
+onto those actual transformed-node outlines, exactly as edge endpoints do.
+Names remain diagram-global, even when a referring fragment is transformed.
+Prefer direct node values for self-contained reusable fragments.
+
+`rel(dx, dy)` still means an offset from the preceding **edge waypoint**;
+it is not a node position. Bézier controls, group pivots, and diagram
+configuration coordinates still require numbers.
 
 ## Circuit constructors (companion package)
 
@@ -98,7 +198,7 @@ a `levels` dictionary with semantic y-level names:
 - `register` (default `-1`)
 - `label` (default `1`)
 
-Plain content bodies remain accepted when semantic levels are not needed.
+Diagram-item arrays or `none` are also accepted when semantic levels are not needed.
 
 Circuit constructors are still ordinary generic nodes under the hood:
 

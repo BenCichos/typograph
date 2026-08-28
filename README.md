@@ -18,7 +18,7 @@ entirely on this package's public API.
 ## Install and import
 
 ```typ
-#import "@preview/typograph:0.2.1" as typ
+#import "@preview/typograph:0.3.0" as typ
 ```
 
 ## Quick start
@@ -52,14 +52,35 @@ complete guide: drawing nodes and edges, shape builders, curve controls and
 waypoints, writing a theme, configuration, fragments, and the exhaustive
 API reference.
 
+## Relative node and label placement
+
+```typ
+#typ.diagram({
+  let g = typ.gate((0, 0), [U])
+  let p = typ.port(g, "right")
+  let a = typ.box(typ.offset(p, 1, 0), label: [A])
+  typ.edge(p, a)
+  typ.place(p.x, -1, [aligned to the port])
+})
+```
+
+Use `box(p)` for both axes or `box(p.x, y)` for one relative axis. Offsets
+use numeric diagram units; port positions follow measured gate geometry.
+The same syntax works with both themes' node constructors. See
+[relative positioning](docs/quarto/nodes.qmd#relative-positioning) for named
+references, dependency chains, and groups.
+
 ## Testing
 
 ```bash
 bash tests/run.sh
 ```
 
-Runs the unit/API/contract/negative test suite, an outline-geometry
-snapshot, and a documentation-figure staleness check. See
+Runs the unit/API/contract/negative test suite, deterministic geometry and
+layout checks, Python helper tests, an outline-geometry snapshot, and a
+documentation-figure staleness check. The six issues from the August 2026
+review now have passing regression coverage; see
+[review fixes](docs/quarto/dev/known-issues.qmd). See
 [Testing](https://bencichos.github.io/typograph/dev/testing.html) for what
 each part covers.
 

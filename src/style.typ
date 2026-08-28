@@ -2,7 +2,7 @@
 // presets live in optional theme modules and are passed to `diagram()`.
 
 #import "shape.typ" as _shapes
-#import "geometry.typ": validate-inset
+#import "geometry.typ": validate-inset, absolute-length, absolute-inset, is-size-length
 
 /// Everything a node style can set, with the value used when it does not.
 /// A preset is this dictionary with some entries replaced; a per-node `style:`
@@ -19,7 +19,7 @@
 /// - `inset` — padding between label and outline. A length or number for all
 ///   four sides, or a dictionary with any of `left`/`right`/`top`/`bottom`/
 ///   `x`/`y`/`rest`, exactly like Typst's own `inset:`.
-/// - `radius` — uniform corner rounding for rectangular builders: an absolute
+/// - `radius` — uniform corner rounding for rectangular builders: a
 ///   length, percentage, or mixture of both, with Typst's `rect` semantics
 ///   (`100%` is maximally rounded). Per-corner dictionaries are deliberately
 ///   outside the outline protocol.
@@ -32,6 +32,8 @@
 /// - `tip` — arrow only: where the body ends and the point begins, as a
 ///   fraction of the half-width.
 /// - `font-size` — overrides the diagram-wide label size for this node.
+/// Geometry containing `em` resolves against surrounding text during layout,
+/// before zoom; percentage components and unknown extension fields survive.
 #let node-defaults = (
   shape: _shapes.empty,
   shape-labelled: auto,
@@ -111,7 +113,7 @@
   }
 }
 
-#let _validate-mark-length(value, source, allow-auto: true) = {
+#let _validate-mark-length(value, source) = {
   if value != auto {
     assert(
       type(value) == length or type(value) == ratio or type(value) == relative,
@@ -176,7 +178,7 @@
     if field in style {
       let value = style.at(field)
       assert(
-        type(value) == length and value >= 0pt,
+        is-size-length(value),
         message: source + " " + field + " must be a non-negative length",
       )
     }
@@ -205,7 +207,7 @@
   if "font-size" in style {
     assert(
       style.font-size == auto or (
-        type(style.font-size) == length and style.font-size > 0pt
+        is-size-length(style.font-size, positive: true)
       ),
       message: source + " font-size must be auto or a positive length",
     )
@@ -241,7 +243,7 @@
   }
   if "highlight-width" in style {
     assert(
-      type(style.highlight-width) == length and style.highlight-width >= 0pt,
+      is-size-length(style.highlight-width),
       message: source + " highlight-width must be a non-negative length",
     )
   }
@@ -261,7 +263,7 @@
   if "label-size" in style {
     assert(
       style.label-size == auto or (
-        type(style.label-size) == length and style.label-size > 0pt
+        is-size-length(style.label-size, positive: true)
       ),
       message: source + " label-size must be auto or a positive length",
     )
@@ -372,7 +374,7 @@
   if "min-size" not in style { return style }
   let size = style.min-size
   assert(
-    type(size) == length and size >= 0pt,
+    is-size-length(size),
     message: "node style min-size must be a non-negative length",
   )
   let out = style
@@ -416,6 +418,47 @@
     )
   }
   out
+}
+
+// Resolve thickness without changing the stroke's other settings or the
+// representation of already-absolute specs. Dash lengths are consumed by
+// Typst itself in the same surrounding context, not by our geometry math.
+#let absolute-stroke(spec) = {
+  if spec == none or spec == auto { return spec }
+  if type(spec) == length { return absolute-length(spec) }
+  let s = stroke(spec)
+  if s.thickness == auto or s.thickness.em == 0 { return spec }
+  stroke(
+    paint: s.paint, thickness: s.thickness.to-absolute(),
+    cap: s.cap, join: s.join, dash: s.dash, miter-limit: s.miter-limit,
+  )
+}
+
+// These layout-boundary normalizers deliberately leave extension fields and
+// part collections untouched. Part-local overrides are normalized separately
+// before inheriting the already-scaled base style.
+#let absolute-node-style(style) = {
+  let out = style
+  for key in ("min-size", "min-width", "min-height", "radius", "font-size", "mark-size", "mark-thickness") {
+    if key in out { out.insert(key, absolute-length(out.at(key))) }
+  }
+  if "inset" in out { out.inset = absolute-inset(out.inset) }
+  for key in ("stroke", "mark-stroke") {
+    if key in out { out.insert(key, absolute-stroke(out.at(key))) }
+  }
+  validate-node-style(out)
+}
+
+#let absolute-edge-style(style) = {
+  let out = style
+  for key in ("highlight-width", "highlight-offset", "label-size", "label-offset") {
+    if key in out { out.insert(key, absolute-length(out.at(key))) }
+  }
+  if "label-inset" in out { out.label-inset = absolute-inset(out.label-inset) }
+  if "stroke" in out { out.stroke = absolute-stroke(out.stroke) }
+  // All input layers were validated before edge preparation. Only changed
+  // lengths need another pass to reject contextually negative dimensions.
+  if out == style { out } else { validate-edge-style(out) }
 }
 
 /// Scales a stroke's thickness by `factor`, leaving paint, dash and caps

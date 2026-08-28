@@ -6,7 +6,7 @@
 ///
 /// Typical usage (diagram coordinates are math-convention: x right, y up):
 /// ```typc
-/// #import "@preview/typograph:0.2.1" as typ
+/// #import "@preview/typograph:0.3.0" as typ
 ///
 /// #typ.diagram({
 ///   let a = typ.node(0, 0, label: [A], style: (shape: typ.shapes.circle, fill: aqua))
@@ -30,6 +30,7 @@
   shape-outline, shape-radius, node-outline, outline-size,
 )
 #import "edge.typ": edge, edge-type, smooth, line, quad, cubic, rel, ref
+#import "position.typ": offset
 #import "content.typ": place-item as place, group
 #import "diagram.typ": diagram
 #import "config.typ": config

@@ -35,6 +35,19 @@ and `square` **reject** a nonzero `style.rotate` instead of silently
 ignoring it — reach for a polygon-based builder when rotated geometry is
 required.
 
+`circle` contains all four corners of the measured label rectangle, including
+the label shift from asymmetric padding. It keeps the existing 1.2-axis
+clearance and minimum-size floor when those already give a larger circle.
+For example, an unpadded `20pt` square label needs a radius of about `14.14pt`.
+
+Unlabeled built-in polygons with zero minima and no padding still produce a
+valid outline: each zero fitting axis receives a `1pt` fallback before the
+template's own proportions and rotation are applied. Explicit nonzero sizes,
+even below `1pt`, are unchanged. This is a non-degeneracy safeguard, not a
+recommended visible node size; use `shapes.empty` for an invisible waypoint.
+The arbitrary `polygon(...)` factory likewise keeps a nonzero template when
+its requested size is zero (normalizing its longer axis to `1pt`).
+
 Shape-builder rotation follows Typst's screen convention, where `+90deg` is
 visually clockwise. This is *not* the same convention as diagram-coordinate
 angles (edge directions, `group()`), where `+90deg` sends `+x` toward
@@ -163,6 +176,13 @@ radius, stroke thickness, and transform offsets scale with `diagram(scale:)`
 and `group(scale:)`; a percentage radius remains a percentage of the scaled
 part. Part-local `min-size` wins over inherited per-axis minima.
 
+Parts affect visual bounds but do not change wire attachment: clipping and
+gate ports use the base outline only. They receive a zero-sized label box,
+so the node label is drawn once on the base. Their `transform` coordinates
+are node-local screen lengths (`+y` down), not diagram coordinates. See the
+[reference](reference/shapes.qmd#composite-shape-styling) for inheritance and
+replacement behavior.
+
 `mark: "cross"` and `mark: "measurement"` are conveniences implemented as
 parts. Mark size, thickness, fill, and stroke are independently configurable.
 A percentage cross size is relative to the resolved base silhouette, so a
@@ -228,7 +248,7 @@ renderer adds the standard per-side inset displacement afterward and unions
 the shifted label with the silhouette for diagram bounds, so an intentional
 offset is never cropped.
 
-Any geometry reducible to those five kinds — closed circle, ellipse,
+Any geometry reducible to those six kinds — closed circle, ellipse,
 rectangle, or polygon silhouettes, plus the two non-drawing kinds — is
 expressible with a custom builder. A genuinely new primitive, such as an
 open path or a shape with a hole, needs a new core outline kind plus

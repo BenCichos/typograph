@@ -1,18 +1,18 @@
 #import "utility.typ": (
   is-node, is-edge, is-content, tight-text, split-direction,
-  vadd, vscale,
+  vadd, vscale, node-key,
 )
-#import "geometry.typ": to-screen, num, resolve-inset, dir-vector
+#import "geometry.typ": to-screen, num, resolve-inset, dir-vector, absolute-length
 #import "style.typ": (
   merge-style, merge-per-kind, scale-stroke, resolve-edge-style-unchecked,
-  validate-edge-style,
+  validate-edge-style, absolute-edge-style,
 )
 #import "theme.typ": neutral-theme, resolve-theme
 #import "node.typ": (
-  node-visual-spec, node-outline, draw-outline, outline-size,
-  shape-radius, gate-port-on-outline, scale-inset,
+  node-visual-spec, draw-outline, outline-size, shape-radius, scale-inset,
 )
 #import "config.typ": current-defaults
+#import "position-layout.typ": prepare-nodes, resolve-positions, port-offset
 #import "edge.typ": (
   resolve-edge-path, point-on-segment, point-on-path, path-start-direction,
   path-end-direction, trim-resolved, trim-resolved-at, normalize-highlight,
@@ -78,30 +78,46 @@
 
 #let stroke-thickness(spec) = {
   if spec == none or spec == auto { return 0pt }
-  if type(spec) == length { return spec }
+  if type(spec) == length { return absolute-length(spec) }
   let value = stroke(spec)
-  if value.thickness == auto { 1pt } else { value.thickness }
+  if value.thickness == auto { 1pt } else { absolute-length(value.thickness) }
 }
 
 // Conservative axis-aligned stroke outset. Smooth/orthogonal closed node
 // outlines need half the thickness; a mitered polygon or wire can protrude up
-// to its stroke's miter limit at an acute join.
-#let stroke-outset(spec, miter: false) = {
+// to its stroke's miter limit at an acute join. An open path's square cap
+// extends along both the tangent and normal (up to sqrt(2) on either axis).
+#let stroke-outset(spec, miter: false, open: false) = {
   let half = stroke-thickness(spec) / 2
-  if not miter or half == 0pt { return half }
+  if half == 0pt or (not open and not miter) { return half }
   let value = stroke(spec)
+  let capped = if open and value.cap == "square" { half * calc.sqrt(2) } else { half }
+  if not miter { return capped }
   let joined = value.join == auto or value.join == "miter"
   let limit = if value.miter-limit == auto { 4 } else { value.miter-limit }
   // Typst defines the miter limit as protrusion / full stroke thickness.
-  if joined { 2 * half * limit } else { half }
+  if joined { calc.max(capped, 2 * half * limit) } else { capped }
 }
 
-#let edge-visual-radius(style, highlight, factor, miter: false) = {
-  let radius = stroke-outset(style.stroke, miter: miter) * factor
+// Shared by highlight emission and bounds; changing a join limit must not
+// leave the diagram's measured box smaller than the emitted geometry.
+#let highlight-offset-miter-limit = 4
+#let highlight-stroke-miter-limit = 4
+
+#let edge-visual-radius(style, highlight, factor, miter: false, highlight-joins: auto) = {
+  let radius = stroke-outset(style.stroke, miter: miter, open: true) * factor
   if highlight.len() > 0 {
     let width = style.highlight-width * factor
     let offset = calc.abs(style.highlight-offset * factor + width / 4)
-    radius = calc.max(radius, offset + width / 4)
+    let joined = if highlight-joins == auto { miter } else { highlight-joins }
+    // offset-polyline clamps centerline displacement to 4 * offset. The
+    // band itself is width/2 thick and uses Typst's miter-limit of 4, so its
+    // join may extend another 2 * width. Curves also have sampled joins,
+    // even when their underlying wire consists of a single Bezier segment.
+    let band-radius = if joined {
+      highlight-offset-miter-limit * offset + highlight-stroke-miter-limit * width / 2
+    } else { offset + width / 4 }
+    radius = calc.max(radius, band-radius)
   }
   radius
 }
@@ -164,7 +180,7 @@
     if length <= 1e-9 { return shifted(point, before) }
     let miter = (sum.at(0) / length, sum.at(1) / length)
     let projection = miter.at(0) * before.at(0) + miter.at(1) * before.at(1)
-    shifted(point, miter, scale: calc.min(1 / projection, 4))
+    shifted(point, miter, scale: calc.min(1 / projection, highlight-offset-miter-limit))
   })
 }
 
@@ -185,7 +201,7 @@
   let width = styles.highlight-width * size-factor
   let band(c) = stroke(
     paint: c.transparentize(100% - styles.highlight-opacity),
-    thickness: width / 2, cap: "butt", join: "miter", miter-limit: 4,
+    thickness: width / 2, cap: "butt", join: "miter", miter-limit: highlight-stroke-miter-limit,
   )
   let base = sample-path-screen(resolved, unit)
   let put(c) = place(top + left, dx: origin.at(0), dy: origin.at(1), c)
@@ -220,22 +236,8 @@
 // Note Typst's `calc.atan2` takes x first, then y.
 #let screen-angle(dir) = calc.atan2(dir.at(0), -dir.at(1))
 
-// A cheap bucket key for node identity. Names are already unique identifiers;
-// using them prevents co-located named nodes from degrading to a quadratic
-// equality scan. Unnamed nodes include their inexpensive visual fields to
-// split the common co-located cases. Exact equality remains authoritative:
-// `repr` intentionally elides function bodies and custom metadata is open.
-#let node-key(n) = if n.name != none {
-  repr(("named", n.name))
-} else {
-  repr((
-    n.x, n.y, n.kind, n.label, n.style,
-    n.at("base-style", default: (:)), n.size-scale,
-    n.at("port-layout", default: none), n.at("legs", default: (:)),
-    n.at("size", default: auto),
-  ))
-}
-
+// node-key() gives a cheap identity bucket, not a unique identifier. Exact
+// equality is authoritative even when custom function metadata share a repr.
 #let outline-for(bucket, node) = {
   for entry in bucket {
     if entry.node == node { return entry.outline }
@@ -554,97 +556,36 @@
   } else {
     resolved.segments.at(index - 1).end
   }
-  let shape = outline-core(outline)
   let outline = numeric-outline(outline)
   let unit-size = num(unit)
-
-  if not from-end {
-    for index in range(resolved.segments.len()) {
-      let start = segment-start(index)
-      let segment = resolved.segments.at(index)
-      if segment.kind == "line" and shape.kind == "polygon" {
-        let crossing = polygon-line-crossing(
-          outline,
-          center,
-          start,
-          segment.end,
-          unit-size,
-        )
-        if crossing != none { return (segment: index, t: crossing) }
-      } else {
-        let samples = if segment.kind == "line" { 1 } else { samples-per-curve }
-        let before-t = 0
-        let before-inside = outline-contains-point(outline, center, start, unit-size)
-        for step in range(1, samples + 1) {
-          let current-t = step / samples
-          let current-inside = outline-contains-point(
-            outline,
-            center,
-            point-on-segment(start, segment, current-t),
-            unit-size,
-          )
-          if before-inside and not current-inside {
-            let low = before-t
-            let high = current-t
-            let low-point = point-on-segment(start, segment, low)
-            let high-point = point-on-segment(start, segment, high)
-            let dx = (high-point.at(0) - low-point.at(0)) * unit-size
-            let dy = (high-point.at(1) - low-point.at(1)) * unit-size
-            let span = calc.sqrt(dx * dx + dy * dy)
-            let count = 10
-            let remaining-span = span / 1024
-            while remaining-span > 0.002 and count < 30 {
-              remaining-span /= 2
-              count += 1
-            }
-            for _ in range(count) {
-              let middle = (low + high) / 2
-              if outline-contains-point(
-                outline,
-                center,
-                point-on-segment(start, segment, middle),
-                unit-size,
-              ) {
-                low = middle
-              } else {
-                high = middle
-              }
-            }
-            return (segment: index, t: (low + high) / 2)
-          }
-          before-t = current-t
-          before-inside = current-inside
-        }
-      }
-    }
-    return none
-  }
-
-  let index = resolved.segments.len() - 1
-  while index >= 0 {
+  let indices = range(resolved.segments.len())
+  // Both ends perform the same inside-to-outside search. Only traversal
+  // order and the sampled parameter direction change; bisection tracks
+  // inside/outside endpoints, so it also works for descending parameters.
+  for index in if from-end { indices.rev() } else { indices } {
     let start = segment-start(index)
     let segment = resolved.segments.at(index)
-    if segment.kind == "line" and shape.kind == "polygon" {
+    if segment.kind == "line" and outline.kind == "polygon" {
       let crossing = polygon-line-crossing(
         outline,
         center,
         start,
         segment.end,
         unit-size,
-        from-end: true,
+        from-end: from-end,
       )
       if crossing != none { return (segment: index, t: crossing) }
     } else {
       let samples = if segment.kind == "line" { 1 } else { samples-per-curve }
-      let before-t = 1
+      let before-t = if from-end { 1 } else { 0 }
       let before-inside = outline-contains-point(
         outline,
         center,
-        segment.end,
+        if from-end { segment.end } else { start },
         unit-size,
       )
       for step in range(1, samples + 1) {
-        let current-t = 1 - step / samples
+        let current-t = if from-end { 1 - step / samples } else { step / samples }
         let current-inside = outline-contains-point(
           outline,
           center,
@@ -652,12 +593,12 @@
           unit-size,
         )
         if before-inside and not current-inside {
-          let low = current-t
-          let high = before-t
-          let low-point = point-on-segment(start, segment, low)
-          let high-point = point-on-segment(start, segment, high)
-          let dx = (high-point.at(0) - low-point.at(0)) * unit-size
-          let dy = (high-point.at(1) - low-point.at(1)) * unit-size
+          let inside-t = before-t
+          let outside-t = current-t
+          let inside-point = point-on-segment(start, segment, inside-t)
+          let outside-point = point-on-segment(start, segment, outside-t)
+          let dx = (outside-point.at(0) - inside-point.at(0)) * unit-size
+          let dy = (outside-point.at(1) - inside-point.at(1)) * unit-size
           let span = calc.sqrt(dx * dx + dy * dy)
           let count = 10
           let remaining-span = span / 1024
@@ -666,25 +607,24 @@
             count += 1
           }
           for _ in range(count) {
-            let middle = (low + high) / 2
+            let middle = (inside-t + outside-t) / 2
             if outline-contains-point(
               outline,
               center,
               point-on-segment(start, segment, middle),
               unit-size,
             ) {
-              high = middle
+              inside-t = middle
             } else {
-              low = middle
+              outside-t = middle
             }
           }
-          return (segment: index, t: (low + high) / 2)
+          return (segment: index, t: (inside-t + outside-t) / 2)
         }
         before-t = current-t
         before-inside = current-inside
       }
     }
-    index -= 1
   }
   none
 }
@@ -816,23 +756,19 @@
           outline != none,
           message: "port() refers to a gate that is not in this diagram — is it connected, or emitted?",
         )
-        let resolved-port-spacing = deferred.node.at("port-spacing", default: auto)
-        if resolved-port-spacing == auto { resolved-port-spacing = port-spacing }
-        if resolved-port-spacing != auto {
-          resolved-port-spacing *= deferred.node.size-scale * size-factor
-        }
-        let (dx, dy) = gate-port-on-outline(
-          outline,
-          deferred.node.legs,
+        let (dx, dy) = port-offset(
+          node-visual-spec(deferred.node), outline,
           deferred.side,
           deferred.index,
+          unit,
           rotate: deferred.at("rotate", default: 0deg),
-          port-spacing: resolved-port-spacing,
+          port-spacing: port-spacing,
+          size-factor: size-factor,
         )
         // Offsets come back in pt; edge geometry works in diagram units.
         resolved.end = (
-          deferred.node.x + num(dx) / num(unit),
-          deferred.node.y + num(dy) / num(unit),
+          deferred.node.x + dx,
+          deferred.node.y + dy,
         )
       } else if deferred.type == "ref" {
         let hit = by-name.at(deferred.name, default: none)
@@ -863,10 +799,10 @@
 /// Lays out and draws a diagram. `body` is a code block that
 /// builds up a flat list of nodes/edges/content, e.g.:
 /// ```typc
-/// #import "@preview/typograph:0.2.1" as typ
+/// #import "@preview/typograph:0.3.0" as typ
 /// typ.diagram({
-///   let a = typ.box(0, 0, [A])
-///   let b = typ.box(1, 0, [B])
+///   let a = typ.box(0, 0, label: [A])
+///   let b = typ.box(1, 0, label: [B])
 ///   typ.edge(a, b)
 /// })
 /// ```
@@ -926,9 +862,9 @@
     if value != auto { value } else { cfg.at(key, default: fallback) }
   }
   let grid = pick(grid, "grid", false)
-  let font-size = pick(font-size, "font-size", auto)
+  let font-size = absolute-length(pick(font-size, "font-size", auto))
   let baseline = pick(baseline, "baseline", auto)
-  let port-spacing = pick(port-spacing, "port-spacing", 7pt)
+  let port-spacing = absolute-length(pick(port-spacing, "port-spacing", 7pt))
   assert(type(grid) == bool, message: "diagram grid must be a boolean")
   assert(
     font-size == auto or (type(font-size) == length and font-size > 0pt),
@@ -940,7 +876,7 @@
   // Resolved to an absolute length here: `scale: 1.2em` is only meaningful
   // once the surrounding font size is known, and `size-factor` below divides
   // by the reference, which a length carrying an em component cannot do.
-  let scale-value = pick(scale, "scale", reference-scale)
+  let scale-value = absolute-length(pick(scale, "scale", reference-scale))
   assert(
     (type(scale-value) == length and scale-value > 0pt)
       or (type(scale-value) in (int, float) and scale-value > 0),
@@ -1010,28 +946,22 @@
     }
   }
 
-  // --- Pass 1b: de-duplicate and prepare nodes before edges need their
-  // outlines. The preparation key excludes x/y/name, allowing Typst to reuse
-  // label measurements and geometry for visually identical nodes.
+  // --- Pass 1b: collect captured position dependencies and prepare outlines
+  // without using coordinates. Resolve the axis graph only when necessary.
+  let collection = prepare-nodes(
+    pending-nodes, work, presets: node-presets, overrides: node-styles,
+    font-size: font-size, size-factor: size-factor, port-spacing: port-spacing,
+  )
+  let positioned = if collection.needs-resolution {
+    resolve-positions(collection, unit, port-spacing: port-spacing, size-factor: size-factor)
+  } else { collection }
+  work = positioned.work
   let drawn-nodes = ()
   let outline-at = (:)
   let by-name = (:)
-  let seen = (:)
-  for node in pending-nodes {
+  for (index, node) in positioned.nodes.enumerate() {
     let key = node-key(node)
-    let bucket = seen.at(key, default: ())
-    if bucket.any(previous => previous == node) { continue }
-    seen.insert(key, bucket + (node,))
-
-    let visual = node-visual-spec(node)
-    let prep = node-outline(
-      visual,
-      preset: node-presets.at(node.kind, default: (:)),
-      override: node-styles.at(node.kind, default: (:)),
-      font-size: font-size,
-      size-factor: size-factor,
-      port-spacing: port-spacing,
-    )
+    let prep = collection.prepared.at(index)
     let size = outline-size(prep.outline, prep.measured)
     let outline-kind = if prep.outline.kind == "parts" {
       prep.outline.base.outline.kind
@@ -1065,10 +995,6 @@
     let lookup = (node: node, outline: prep.outline)
     outline-at.insert(key, outline-at.at(key, default: ()) + (lookup,))
     if node.name != none {
-      assert(
-        node.name not in by-name,
-        message: "duplicate node name " + repr(node.name) + " in one diagram",
-      )
       by-name.insert(node.name, node)
     }
 
@@ -1154,12 +1080,12 @@
       // Resolve the complete style once. Clipping, bounds and emission all use
       // this same value, preventing precedence drift and repeated dictionary
       // merges on the per-edge hot path.
-      let style = resolve-edge-style-unchecked(
+      let style = absolute-edge-style(resolve-edge-style-unchecked(
         item,
         edge-styles,
         presets: edge-presets,
         defaults: edge-defaults,
-      )
+      ))
       let highlight = normalize-highlight(style.highlight)
 
       // Resolve only the two small outline records this edge can touch.
@@ -1212,6 +1138,7 @@
       let visual-radius = edge-visual-radius(
         style, highlight, k,
         miter: resolved.segments.len() > 1,
+        highlight-joins: not resolved.straight or resolved.segments.len() > 1,
       )
       // Control points conservatively bound every supported Bézier. Derive the
       // short-lived list from canonical segment data instead of retaining a

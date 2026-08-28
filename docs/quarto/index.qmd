@@ -25,8 +25,8 @@ one thing. This project keeps them separate:
 Nothing from a companion package is applied unless a document asks for it:
 
 ```typ
-#import "@preview/typograph:0.2.1" as typ
-#import "@preview/typograph-zx:0.1.0" as zx
+#import "@preview/typograph:0.3.0" as typ
+#import "@preview/typograph-zx:0.2.0" as zx
 #let diagram = typ.diagram.with(theme: zx.theme)
 ```
 
@@ -47,7 +47,7 @@ and what it costs.
 From a Typst package installation:
 
 ```typ
-#import "@preview/typograph:0.2.1" as typ
+#import "@preview/typograph:0.3.0" as typ
 ```
 
 Or, working inside this repository, import the source directly:
@@ -62,8 +62,8 @@ you want one (see [Theming](theming.qmd)). To draw ZX-calculus diagrams
 specifically, add [`typograph-zx`](https://bencichos.github.io/typograph-zx/) and bind its theme:
 
 ```typ
-#import "@preview/typograph:0.2.1" as typ
-#import "@preview/typograph-zx:0.1.0" as zx
+#import "@preview/typograph:0.3.0" as typ
+#import "@preview/typograph-zx:0.2.0" as zx
 #let diagram = typ.diagram.with(theme: zx.theme)
 ```
 

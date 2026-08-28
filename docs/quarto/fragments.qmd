@@ -4,6 +4,7 @@
 
 ```typ
 typ.place(x, y, body, align: center + horizon)
+typ.place(point, body, align: center + horizon)
 ```
 
 Places any Typst content at a diagram coordinate and folds its measured box
@@ -12,6 +13,15 @@ into the diagram's bounds, the same as a node would. Alignment must be
 than logical `start`/`end`, because diagram coordinates are physical and
 direction-independent; there's no surrounding text direction for `start`/
 `end` to resolve against.
+
+For a caption that should follow a gate port, use
+`typ.place(typ.offset(p, 0, -0.5), [caption])`, or use `p.x`/`p.y` for only
+one relative axis. See [Relative positioning](nodes.qmd#relative-positioning).
+
+`place()` content keeps its own size under both `diagram(scale:)` and
+`group(scale:)`: only its position moves. To resize a caption, set its text
+size or wrap the content in Typst's own scaling function. Supplying just one
+alignment axis centers the unspecified axis.
 
 ## Reusable fragments with `group()`
 
@@ -75,6 +85,39 @@ different sizes — make it a function instead of a bare value:
   typ.group(dy: -1.1, pair($pi/2$, $gamma$))
 })
 ```
+
+### Names and reusable fragments
+
+Nodes are values, not mutable handles. `group()` returns transformed copies
+without changing the original fragment. Equal node values emitted more than
+once are drawn once, including nodes captured by multiple edges.
+
+Names are unique across the entire diagram; `group()` does not rename them
+or introduce a namespace. Reusing a named fragment at a different position
+therefore causes a duplicate-name error. Give a fragment factory a prefix:
+
+```typ
+#let named-pair(prefix) = {
+  typ.box(0, 0, label: [A], name: prefix + "-a")
+  typ.box(1, 0, label: [B], name: prefix + "-b")
+  typ.edge(typ.ref(prefix + "-a"), typ.ref(prefix + "-b"))
+}
+#typ.diagram({
+  named-pair("first")
+  typ.group(dy: -1, named-pair("second"))
+})
+```
+
+A `ref()` resolves against the final diagram's emitted nodes, including nodes
+declared later. It does not capture or emit a node itself. Prefer direct node
+values for self-contained fragments that do not need external named access.
+
+Relative node/content positions also transform with a fragment. Projections
+such as `p.x` and `p.y` select the fragment's local axes: after a quarter-turn,
+an original x-alignment becomes a vertical alignment. Whole-point placement
+still lands on the same actual port as an edge endpoint, including when the
+gate's graphic stays upright. Named references remain global anchors; they
+are not translated again just because the referring fragment moves.
 
 ## Diagrams inside equations
 

@@ -1,86 +1,110 @@
 # Performance Model
 
-`tests/stress.typ` (400 nodes, 760 edges) is the reproducible fixture behind
-every claim in this page. Benchmark on one machine and one Typst version at
-a time — a single timing is not a portable guarantee:
+## Reproducible measurements
+
+Run the benchmark harness from the repository root:
 
 ```bash
-/usr/bin/time -p typst compile --root . tests/stress.typ /tmp/typograph-stress.pdf
+python3 tests/benchmark.py --runs 7 --output /tmp/typograph-benchmarks.json
 ```
 
-`tests/shape-stress.typ` isolates repeated outline preparation, and
-`tests/curve-stress.typ` isolates clipped cubic paths with repeated labels,
-exercising curve/outline intersections and the shared label-distance table.
-`bash tests/run.sh` compiles all three as regression fixtures on every run,
-so a real performance regression fails CI the same way a correctness
-regression would.
+It measures fresh compiler processes with bundled fonts, one warmup per
+workload, median/min/max wall time, and median peak resident memory on macOS
+or Linux. Times include startup, compilation, rendering, and PDF export;
+filesystem caches are not cleared. Use `--no-memory` when the environment
+does not permit the platform's memory probe. A 60-second per-compile timeout
+prevents runaway measurements; it is configurable with `--timeout`.
+
+To compare two source trees, copy the same fixture files into both trees and
+alternate their measurements in one run:
+
+```bash
+python3 tests/benchmark.py --root before=/path/to/before --root after=. --runs 7
+```
+
+The three existing stress fixtures cover a 400-node/760-edge grid, 256
+32-sided polygons with 480 clipped edges, and 100 clipped/labelled cubics.
+`tests/benchmark.typ` adds 144 gates with 576 port edges, a 240-node named
+chain with 160 followers, a 101-node captured chain, and 100 rotated groups
+with mixed-axis placement. Select a workload with `--case captured-chain`.
+
+The correctness suite compiles the stress fixtures, **without a timing
+threshold**. Successful compilation does not prove the absence of a
+performance regression. Compare repeated measurements on the same machine
+and compiler version; small differences within the observed ranges are noise.
+
+## Recorded review measurements
+
+On macOS 26.5.2 ARM64 with Typst 0.15.1, seven fresh-process samples per
+revision gave these medians for the 2026-08-28 simplification review:
+
+| Workload | Before (s) | After (s) | Before RSS (MiB) | After RSS (MiB) |
+|---|---:|---:|---:|---:|
+| grid | 0.282 | 0.281 | 67.8 | 67.6 |
+| polygons | 0.309 | 0.309 | 52.4 | 51.8 |
+| curves | 0.203 | 0.201 | 62.6 | 62.8 |
+| ports | 0.205 | 0.204 | 67.3 | 67.4 |
+| named-chain | 0.272 | 0.270 | 77.2 | 79.3 |
+| captured-chain | 0.567 | 0.336 | 61.9 | 45.8 |
+| grouped-axes | 0.497 | 0.483 | 98.3 | 79.8 |
+
+The captured-chain workload used about 41% less time and 26% less peak memory.
+Other timing ranges broadly overlapped. Grouped-axis memory fell about 19%;
+named-chain memory rose about 3% (roughly 2 MiB). These figures compare the
+pre-review working tree, including relative positioning, with the simplified
+code—not an older release. Raw samples and the review report are checked in as
+`docs/benchmarks-2026-08-28.json` and
+`docs/review-simplification-2026-08-28.md`.
 
 ## The renderer's passes correspond to real dependencies
 
-1. classify items and collect node endpoints;
-2. deduplicate nodes and prepare each one's label/outline — edges and ports
-   both need that silhouette before they can be planned;
-3. resolve paths and styles, accumulating complete bounds;
-4. emit edges/content first, then nodes on top, once the origin is known.
+1. Classify items and collect node endpoints and captured position dependencies.
+2. Deduplicate nodes and prepare their labels/outlines; ports and clipping need
+   those silhouettes before paths can be planned.
+3. Resolve an axis dependency graph when positions are deferred. Numeric-only
+   node/content positions skip this graph.
+4. Resolve paths and styles, accumulating complete bounds.
+5. Emit edges/content first, then nodes on top, once the origin is known.
 
-Combining the node and edge passes would either repeat node geometry work or
-make forward references and ports impossible (an edge can reference a node
-defined later in the same diagram body). Within those four necessarily
-sequential passes, the implementation avoids redundant work in a few
-specific, deliberate ways:
+Combining node and edge preparation would repeat geometry work or prevent
+forward references. Within those passes:
 
-- **One prepared outline drives everything.** A node's outline is computed
-  once and reused for drawing, bounds, ports, and wire clipping — not
-  recomputed per consumer, and not allowed to drift between them.
-- **Skip work whose precondition doesn't hold.** Unlabeled nodes skip label
-  measurement. Endpoints at plain coordinates skip silhouette lookup
-  entirely. Deferred-endpoint resolution is only entered when a deferred
-  endpoint actually exists, and each edge is handed only the identity
-  lookup bucket it needs — never the whole diagram-wide node index.
-- **Prefer analytic geometry over sampling when the shape allows it.**
-  Straight wires against polygon outlines use exact segment/edge
-  intersection. Explicitly directed anchors (`from:`/`to:`) and common
-  single-segment straight clipping need no curve sampling at all. Other
-  curved endpoints fall back to a bounded outline-intersection search with
-  a physical-accuracy refinement pass, splitting the original Bézier
-  directly rather than re-deriving it — and a distance-based label's
-  position and tangent samples share that same distance table instead of
-  rebuilding it.
-- **Compute once, apply per instance.** The regular-polygon factory
-  precomputes its unit points and trigonometry once at factory time, not
-  per node; `group()` computes its `sin`/`cos` once per call and reuses them
-  across every item in the fragment, rather than recomputing per point.
+- One prepared outline drives drawing, bounds, ports, and clipping.
+- Captures use flat node tables with integer references. A pair projecting
+  the same point imports its table once; normalized nodes are not deduplicated
+  again. Identity buckets never stringify public capture graphs, and exact
+  equality still distinguishes nodes that share a bucket.
+- Unlabelled nodes skip measurement. Coordinate endpoints skip silhouette
+  lookup. Ordinary edges receive only the identity buckets they need, not the
+  whole diagram-wide index in each memoized function call.
+- Polygon/line intersections are analytic. Curved endpoints use bounded
+  sampling and bisection, then split the original Bézier. Distance-based label
+  positions and tangents share their sampled distance table.
+- Regular-polygon factories precompute unit geometry. A group computes
+  trigonometry once, then applies its affine matrix to every item.
 
-## A concrete tradeoff: `diagram.typ`'s bounds accumulation
+## Simplification boundaries
 
-Bounds tracking (the running min/max x and y that determine the diagram's
-final size) is implemented as four mutable scalar variables threaded through
-repeated inline `if seen-point { .. } else { .. }` blocks, rather than a
-small helper function that takes a point and updates a bounds value. This
-looks, at a glance, like duplicated code begging to be extracted — and it
-was deliberately left that way in review, for two compounding reasons:
+Forward and reverse clipping share one inside-to-outside traversal. Simple
+and composite node bounds use the same silhouette/label calculation; native
+shapes share label-overlay handling. One length-scaling helper retains
+percentage components while scaling physical dimensions. Successive offsets
+combine their deltas instead of growing an expression stack.
 
-- **Typst closures can't mutate captured outer-scope variables.** A helper
-  called once per point, per node, in the hottest loops in the renderer,
-  cannot update `min-x`/`max-x`/`min-y`/`max-y` in its caller's scope by
-  side effect — there is no `&mut` equivalent. The only closure-based
-  alternative is a helper that *returns* an updated bounds value, which
-  forces either a dictionary allocation per call or a fixed-size return
-  tuple manually destructured at every call site — the latter reduces to
-  exactly the inline code already there, minus the readability of an
-  explicit `if`.
-- **This loop runs thousands of times in realistic diagrams.** `tests/
-  stress.typ`'s 400-node, 760-edge fixture touches this path once per point
-  across every node outline and every edge's sampled geometry. A dictionary
-  return per point is a real, measurable allocation cost at that scale, not
-  a theoretical one.
+Some separation remains intentional. Numeric layouts skip capture normalization
+and the dependency solver. Partial-axis group transforms still need their
+local-frame rebasing, even though whole-point placement has a simpler path.
+Bounds accumulation keeps four local scalars; this review did not benchmark
+a replacement and makes no speed claim about hypothetical alternatives.
 
-The lesson generalizes: a pattern that looks like duplication in isolation
-can be a correctness-preserving, deliberately-chosen tradeoff once you know
-what loop it's inside and what the language will and won't let you do about
-it. When extending this file, don't "clean up" these four blocks without
-re-checking both constraints against the current Typst version — the
-closure-mutation limitation in particular is a language behavior, not a
-style choice, and is worth re-verifying empirically (a minimal `typst
-compile` probe, not just re-reading old notes) before relying on it, since
-it's exactly the kind of fact a language update could quietly change.
+More detailed identity keys were tested and rejected: serializing normalized
+coordinate expressions reduced bucket collisions but slowed the grouped-axis
+workload. Fewer comparisons alone do not establish a faster implementation.
+
+After expression compilation, dependency resolution visits each axis and
+dependency once. Constructing and interning captured snapshots costs additional
+work; an entire direct-capture chain is **not** guaranteed linear-time. For
+large generated graphs, named references keep each reference compact, provided
+the referenced nodes are explicitly emitted. Deep arbitrary expression trees,
+custom shape builders, and enormous diagrams are not resource-bounded by the
+package.

@@ -19,7 +19,7 @@
 // `config()` reverts cleanly when it ends. The state is read during the
 // diagram's existing contextual layout work; it does not add another pass.
 
-#let defaults-state = state("@preview/typograph:0.2.1/config-defaults", ((:),))
+#let defaults-state = state("@preview/typograph:0.3.0/config-defaults", ((:),))
 
 #let config-keys = (
   "scale", "scale-edges", "font-size", "grid", "inset", "anchor",
@@ -51,6 +51,8 @@
 /// `node-styles`/`edge-styles` merge with (rather than replace) the
 /// package defaults, and a diagram's own `node-styles:` merges on top of
 /// the configured ones.
+/// `auto` preserves the enclosing value except for `font-size` and `baseline`,
+/// where it restores document text sizing and the calculated baseline.
 #let config(body, ..opts) = {
   assert(opts.pos().len() == 0, message: "config() takes only named arguments, plus the body")
   let given = opts.named()
@@ -63,6 +65,9 @@
   defaults-state.update(stack => {
     let next = stack.last()
     for (key, value) in given {
+      // Forwarding an optional auto is inheritance, except where auto is a
+      // meaningful resolved request (document font or calculated baseline).
+      if value == auto and key not in ("font-size", "baseline") { continue }
       if key == "node-styles" {
         next.insert(key, merge-per-kind(next.at(key, default: (:)), value))
       } else if key == "edge-styles" {

@@ -330,15 +330,27 @@
 #assert(measurement-bounds.left < 0pt and measurement-bounds.right > 0pt)
 #assert(measurement-bounds.top < -measurement-mark.base.outline.half-height)
 
-// Port capability alone must not enlarge a compact one-port marker. Multiple
-// ports do grow the corresponding axis from their exact center spacing plus
-// the established gate margin.
+// Port capability and the generic gate's label padding must not enlarge an
+// unlabeled compact one-port marker. Multiple ports do grow the corresponding
+// axis from their exact center spacing plus the established gate margin.
 #let compact-gate = typ.gate(
   0, 0, none,
   legs: (right: 1),
-  style: (shape: typ.shapes.circle, min-size: 3pt, inset: 0pt),
+  style: (shape: typ.shapes.circle, min-size: 3pt),
 ).first()
 #assert(approx-length(node-outline(compact-gate).outline.radius, 1.5pt))
+
+// A gate constructor obtained with `.with(kind: ..)` inherits scalar `size:`
+// as well, which is how standalone circuit style files define compact kinds.
+#let standalone-target = typ.gate.with(kind: "target")
+#let scalar-target = standalone-target(
+  0, 0, none,
+  legs: (left: 1),
+  size: 1pt,
+  style: (shape: typ.shapes.circle),
+).first()
+#assert(scalar-target.size == (1pt, 1pt))
+#assert(approx-length(node-outline(scalar-target).outline.radius, 0.5pt))
 
 #let multi-port-height(spacing) = {
   let n = typ.gate(

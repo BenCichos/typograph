@@ -40,7 +40,7 @@ Two things about this shape are load-bearing, not incidental:
 
 - **Arrays, not bare dictionaries.** A Typst code block joins its
   statements' values with `+`. Arrays concatenate under `+`; bare
-  dictionaries don't have a sensible `+` at all. Wrapping every item in a
+  dictionaries merge their keys instead of collecting separate items. Wrapping every item in a
   length-one array is what makes `{ z(0,0); x(1,0) }` "just work" as item
   collection, with no explicit `push`/accumulator anywhere in a document —
   see [Core Concepts](../concepts.qmd#a-diagram-body-is-just-a-list-of-items)
@@ -60,20 +60,20 @@ produced any given item.
 ## The coordinate flip, and where it happens exactly once
 
 Diagram coordinates use the mathematical convention (`y` up); Typst's own
-layout primitives use the screen convention (`y` down). Every other module
-works in diagram-space; the flip from one to the other happens in exactly
-one function, `geometry.typ`'s `to-screen(p, unit)`:
+layout primitives use the screen convention (`y` down). Node positions and
+resolved edge paths use diagram-space; their conversion to on-page positions
+is centralized in `geometry.typ`'s `to-screen(p, unit)`:
 
 ```typ
 #let to-screen(p, unit) = (p.at(0) * unit, -p.at(1) * unit)
 ```
 
-Every place the renderer eventually calls `place(dx:, dy:)` or builds a
-`curve.*` point goes through this. Centralizing it here means the sign flip
-only has to be gotten right once, and every other module — including a
-custom shape builder or a project's own geometry helper — never has to
-think about which convention it's in, because it's always diagram-space
-until the last possible moment.
+World positions pass through this function before placement. Shape builders
+are the important exception: their points, label offsets, and decorative
+part translations are already node-local **screen-space lengths**. Port
+projection converts those local lengths back to diagram-space offsets before
+the edge path is rendered. Keep this boundary explicit in custom builders;
+applying the world-space y-flip to their points a second time mirrors them.
 
 This is also the source of the one recurring "gotcha" documented throughout
 the guide: shape-builder angles (`style.rotate`) are Typst's screen
@@ -85,3 +85,46 @@ runs. Both conventions are internally consistent; they just answer to
 different layers, which is why a node whose shape should visually track a
 `group(rotate: angle)` needs `style: (rotate: -angle)` on that node — see
 [Fragments and Equations](../fragments.qmd#reusable-fragments-with-group).
+
+## Contextual lengths at the layout boundary
+
+Constructors and style merging preserve font-relative inputs without needing
+layout context. `node-outline()` and the diagram's edge preparation normalize
+known geometry fields to absolute lengths before zoom and numeric geometry.
+Part-local overrides normalize before inheriting the scaled base style;
+unknown custom style fields remain untouched. Percentage components retain
+their native reference semantics.
+
+Length validation rejects definitely invalid signs at construction time.
+Mixed-sign values such as `1em - 12pt` need the surrounding font size before
+their sign is known, so the resolved style is validated again during layout.
+Already-absolute helpers remain context-free; avoid unconditionally calling
+`.to-absolute()` on their inputs, since even `1pt.to-absolute()` requests
+context in a non-contextual helper.
+
+## Deferred positions
+
+`position.typ` holds the shared point/axis protocol, constructor argument
+parsing, offsets, and affine expression transforms. Captured nodes are
+flattened into local tables; their positions refer to integer indices rather
+than recursively embedding the same ancestors in both axes. Public values
+remain ordinary immutable data, without layout callbacks or mutable handles.
+A pair projecting the same point shares one capture-table import. Consecutive
+offsets are combined into one displacement, keeping their expression depth
+constant without changing the explicit-point clipping semantics.
+
+`position-layout.typ` merges these tables into diagram-local identities,
+prepares outlines without coordinates, and resolves an iterative dependency
+graph with one vertex per node axis. Named references resolve against the
+whole diagram; direct captures emit their source nodes. Missing names/ports
+and cycles produce diagnostics before any drawing is emitted. Identity is
+based on symbolic source values, not coincident resolved coordinates.
+Capture normalization already interns nodes, so outline preparation preserves
+that table's order and indices rather than deduplicating it again.
+
+Group transforms rebase projections into the fragment's local frame around
+transformed anchors, then apply its affine transform. Port candidates use
+the same final outline and group rotation as edge endpoints, which matters
+when a non-square graphic remains upright. Outline preparation remains
+independent of position, and drawing/clipping/bounds use the final numeric
+positions. Existing numeric-only layouts skip the coordinate graph.

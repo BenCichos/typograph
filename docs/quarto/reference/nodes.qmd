@@ -4,6 +4,13 @@ See [Drawing Nodes](../nodes.qmd) for the narrative version.
 
 ## Generic constructors
 
+All single-node constructors below accept either `x, y` or one point. A
+point is a coordinate pair, node center, port, named reference, or offset.
+Each separate axis may be numeric or a deferred `.x`/`.y` coordinate.
+Examples: `node(p)`, `box(p, label: [A])`, `gate(p, [U])`, and
+`make-node("custom", p)`. Existing numeric calls and partial application
+remain supported. See [Relative positioning](../nodes.qmd#relative-positioning).
+
 ```typ
 typ.node(x, y, label: none, name: none, style: (:), kind: "node", base-style: (:))
 ```
@@ -32,7 +39,9 @@ minimum size grows only when an axis has multiple ports, using their exact
 center spacing plus the gate margin: `(count - 1) * spacing + 12pt`
 horizontally and `(count - 1) * spacing + 9pt` vertically, with the lengths
 scaled by the diagram. A lone port leaves the styled minimum untouched.
-`size: (w, h)` overrides it. `max-legs-per-side` (when not `none`)
+`size:` accepts one non-negative length for a square or a `(w, h)` pair and
+overrides it. Unlabeled gates contribute no implicit label inset, so compact
+theme minima are not floored by generic gate padding. `max-legs-per-side` (when not `none`)
 rejects any side with too many ports. `port-spacing:` sets an exact positive distance between neighboring
 port centers; `auto` inherits the diagram/config value. `kind:` selects the
 theme preset independently of port capability.
@@ -171,7 +180,7 @@ fock_state(x, y, label: [$n$], name: none, style: (:), legs: (right: 1))
 These are convenience constructors exported by
 `@preview/typograph-circuit:0.1.0`.
 `controlled_z` aliases `cz`; `fredkin` aliases `cswap`. Marker `size:` is a
-positive length or `auto`. `auto` leaves normal theme/diagram/instance
+non-negative length or `auto`. `auto` leaves normal theme/diagram/instance
 `min-size` precedence intact; filled and open controls default to `5pt`, and
 the target defaults to `12pt`. An explicit size replaces that styled minimum;
 a label may still enlarge the fitted marker. `cnot` forwards its
@@ -182,13 +191,33 @@ typ.port(node, side, index: 0)
 ```
 `side` is `"left"`/`"right"`/`"top"`/`"bottom"`; `index` may be positional.
 Resolved once the node's measured outline is known; carries its node, so an
-edge through a port alone still draws the gate.
+edge or relative placement through a port alone still draws the gate.
+`node` can also be a named `ref("gate")`; that gate must be emitted elsewhere,
+and its port capability/index are checked during layout. The result exposes
+deferred `.x` and `.y` values and is accepted as a single node position.
+
+Index zero is the bottommost left/right port, or the leftmost top/bottom
+port. Omitted sides have no ports. `port-spacing` spaces candidates on the
+bounding rectangle, then projects them onto the actual silhouette; exact
+spacing is not guaranteed after projection onto curved or undersized shapes.
+`size:` overrides a gate's minimum, not its label-plus-inset fit.
+
+```typ
+typ.offset(point, dx, dy)
+```
+
+Returns a point shifted by numeric diagram units. Signed/zero offsets and
+nested offsets are accepted; lengths and `rel()` sources are not. The result
+exposes `.x`/`.y`, captures direct source nodes, and works in node constructors,
+`place`, and edge waypoints. An offset moves a node's center, not its boundary.
+Use `offset(p, 1, 0).x`, not arithmetic on deferred `p.x`.
 
 ```typ
 typ.node-type(kind, base-style: (:), flippable: false)
 ```
 Returns `(x, y, label: none, name: none, style: (:))`, or, with
 `flippable: true`, `(x, y, label: none, flip: auto, name: none, style: (:))`.
+Both variants also accept a single point in place of `x, y`.
 `kind` must be a string. See
 [Directional shapes and flip](../shapes.qmd#directional-shapes-and-flip) for
 when to set `flippable: true`.
@@ -227,7 +256,7 @@ typ.node-defaults  // ==
 | `shape-labelled` | Alternate builder used only when a label is present, or `auto`. |
 | `fill`, `stroke` | Native Typst paint/stroke values. |
 | `min-width`, `min-height`, `min-size` | `min-size` shorthand expands both axes; an explicit per-axis key wins on its axis within one dictionary regardless of write order; across dictionaries, later always wins on whichever axis it sets. |
-| `inset` | Number/length, or side dictionary (`left`/`right`/`top`/`bottom`/`x`/`y`/`rest`); unknown side keys error. |
+| `inset` | Number/length, or side dictionary (`left`/`right`/`top`/`bottom`/`x`/`y`/`rest`); unknown side keys error. A number is points at the reference scale (unlike diagram margins, where numbers are coordinate units). Both forms follow node zoom. |
 | `radius` | Uniform corner radius for `rect`/`square`: length, percentage, or relative length; clamped to the maximum sensible rounded radius. No per-corner radii. |
 | `rotate` | Angle, Typst screen convention (`+90deg` visually clockwise). Rejected (not ignored) by axis-aligned builders when nonzero. |
 | `flip` | Boolean; mirrors a directional builder across its local y-axis, before `rotate`. |
@@ -253,3 +282,50 @@ A theme's own node constructor table — like
 [`typograph-zx`'s](https://bencichos.github.io/typograph-zx/) — lives in
 that theme's own reference, not here: this page only covers the generic
 constructors every theme is built from.
+
+## Geometry helpers for theme authors
+
+These exports are useful for geometry assertions without rendering a complete
+diagram. They do not read `config()` or select a diagram theme themselves.
+
+```typ
+typ.node-outline(node, preset: (:), override: (:), font-size: auto,
+                 size-factor: 1, port-spacing: auto)
+typ.shape-outline(style, label-body, measured, builder: auto, part-scale: 1)
+typ.shape-radius(outline, angle)
+typ.outline-size(outline, measured)
+```
+
+- `node-outline` takes the **bare dictionary**, e.g. `typ.node(...).first()`,
+  not the constructor's one-item array. Pass the selected kind's preset and
+  per-diagram override explicitly. It returns a dictionary with `label-body`,
+  `style`, `outline`, and `measured`. Labeled nodes and geometry containing
+  `em` require `context`; unlabeled absolute geometry remains context-free.
+- `size-factor` is overall diagram zoom, not `scale-edges`; it multiplies the
+  node's own `size-scale`. Explicit `port-spacing` is also zoomed. The full
+  renderer supplies `7pt`; standalone `node-outline` uses that same fallback
+  for gate sizing when spacing is left `auto`.
+- `shape-outline` takes an already resolved, absolute-geometry style and a
+  measured label box.
+  It does not resolve themes or resize the base geometry. An explicit
+  `builder:` overrides automatic shape selection. `part-scale` scales
+  part-local overrides and marks; leave it at `1` for ordinary standalone use.
+- `shape-radius` returns a length in **screen-space** direction (`90deg`
+  points down); it ignores decorative parts and uses the base silhouette.
+- `outline-size` returns signed `left`, `right`, `top`, `bottom` plus `width`
+  and `height`, including displaced labels and parts but **excluding stroke
+  outsets and diagram margins**. It is not the full rendered diagram size.
+
+```typ
+#context {
+  let n = typ.box(0, 0, label: [A]).first()
+  let prepared = typ.node-outline(n, size-factor: 0.8)
+  let bounds = typ.outline-size(prepared.outline, prepared.measured)
+  assert(bounds.width >= prepared.measured.width)
+}
+```
+
+`node-outline` resolves supported geometric `em` fields before applying zoom.
+Unknown custom style fields pass through unchanged; custom builders must
+resolve any font-relative extension data they consume. See
+[Font-relative lengths](diagram.qmd#font-relative-lengths) for the sizing rules.

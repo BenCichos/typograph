@@ -25,6 +25,7 @@ book:
         - dev/performance.qmd
         - dev/extending.qmd
         - dev/testing.qmd
+        - dev/known-issues.qmd
     - part: "Reference"
       chapters:
         - reference/diagram.qmd

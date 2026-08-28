@@ -1,10 +1,14 @@
 #import "utility.typ": is-node, is-edge, is-content, is-coord, split-direction
+#import "position.typ": position-args, transform-value, point-value, with-coordinates
 
 /// Places arbitrary content at diagram coordinates `(x, y)` — e.g. a label,
 /// a "⋯" leg-count marker, or a caption. Exported as `typ.place` by the
 /// package facade.
-#let place-item(x, y, body, align: center + horizon) = {
-  assert(type(x) in (int, float) and type(y) in (int, float), message: "place coordinates must be numbers")
+/// Also accepts place(point, body); either separate axis may be deferred.
+#let place-item(align: center + horizon, ..position) = {
+  let parsed = position-args(position, source: "place", trailing: 1)
+  let (x, y) = parsed.position
+  let body = parsed.tail.first()
   assert(type(align) == alignment, message: "place align must be an alignment")
   assert(
     align.x in (none, left, center, right)
@@ -25,10 +29,10 @@
 /// composes with itself:
 ///
 /// ```typc
-/// #import "@preview/typograph:0.2.1" as typ
+/// #import "@preview/typograph:0.3.0" as typ
 /// let motif = {                     // define once...
-///   let a = typ.box(0, 0, [A])
-///   let b = typ.box(0, 1, [B])
+///   let a = typ.box(0, 0, label: [A])
+///   let b = typ.box(0, 1, label: [B])
 ///   typ.edge(a, b)
 /// }
 /// typ.diagram({
@@ -64,6 +68,7 @@
   let (pivot-x, pivot-y) = pivot
   let translate-x = pivot-x - a * pivot-x - b * pivot-y + dx
   let translate-y = pivot-y - c * pivot-x - d * pivot-y + dy
+  let matrix = (a, b, c, d, translate-x, translate-y)
   let transform(point) = (
     a * point.at(0) + b * point.at(1) + translate-x,
     c * point.at(0) + d * point.at(1) + translate-y,
@@ -77,13 +82,7 @@
     let (angle, strength) = split-direction(direction)
     (angle + rotate, strength * scale)
   }
-  let transform-node(node) = {
-    let point = transform((node.x, node.y))
-    node.x = point.at(0)
-    node.y = point.at(1)
-    node.size-scale *= scale
-    node
-  }
+  let transform-node(node) = transform-value(node, "node", matrix, rotate, scale)
 
   items.map(it => {
     if is-node(it) {
@@ -91,7 +90,7 @@
       // at layout time, so scaling `size-scale` already carries them along.
       transform-node(it)
     } else if is-content(it) {
-      let p = transform((it.x, it.y))
+      let p = transform-value((it.x, it.y), "pair", matrix, rotate, scale)
       it.x = p.at(0)
       it.y = p.at(1)
       it
@@ -133,14 +132,17 @@
             wp.defer.dy = vector.at(1)
           } else if wp.defer.type == "port" {
             // The port holds its own handle on the gate; keep it in step.
-            wp.defer.node = wp.node
+            if wp.node != none { wp.defer.node = wp.node }
             wp.defer.rotate = wp.defer.at("rotate", default: 0deg) + rotate
+            wp.defer = with-coordinates(wp.defer)
+          } else if wp.defer.type == "position" {
+            wp.defer = point-value(transform-value(wp.defer.point, "point", matrix, rotate, scale))
           }
           // `ref` needs nothing: it resolves by name, and the node it names
           // is transformed as an item in its own right.
           return wp
         }
-        wp.end = transform(wp.end)
+        wp.end = transform-value(wp.end, "pair", matrix, rotate, scale)
         if wp.ctrl != none and wp.ctrl != auto { wp.ctrl = wp.ctrl.map(transform) }
         wp
       })
